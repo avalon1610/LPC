@@ -250,7 +250,8 @@ class CLPC
 public:
 	CLPC(void);
 	virtual ~CLPC(void) {};
-	void runServer(TCHAR *ServerName = (TCHAR *)SERVERNAME_W);
+	void runServer(TCHAR *ServerName);
+	void runServer();
 	bool Connect(TCHAR *ServerName);
 	bool AsyncSend(TCHAR *msg);
 	bool SyncSend(TCHAR *msg);
@@ -261,6 +262,21 @@ public:
 	//use it < DISPATCH_LEVEL
 	static RTL_GENERIC_TABLE CallBackList;
 	void InsertCallBack(ULONG command,PVOID callback);
+
+	void *operator new (size_t lBlockSize)
+	{
+		PAGED_CODE();
+		return ExAllocatePoolWithTag(PagedPool, lBlockSize, m_AllocTag);
+	}
+
+	void operator delete(void *p)
+	{
+		PAGED_CODE();
+		if (!p)
+			return;
+		ExFreePoolWithTag(p, m_AllocTag);
+	}
+
 #endif
 	void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
 
@@ -281,7 +297,7 @@ private:
 #endif
 
 	bool bOK;
-	bool InitProcAddress();
+	
 	HANDLE hConnectPort;
 	HANDLE SectionHandle;
 	HANDLE hThread;
@@ -294,7 +310,9 @@ private:
 	PRTL_GENERIC_COMPARE_ROUTINE CompareRoutine;
 	PRTL_GENERIC_ALLOCATE_ROUTINE AllocateRoutine;
 	PRTL_GENERIC_FREE_ROUTINE FreeRoutine;
+	bool FindKernelFunction();
 #else
+	bool InitProcAddress();
 	bool CheckWOW64();
 #endif
 };

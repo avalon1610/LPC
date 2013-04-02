@@ -265,6 +265,7 @@
     <ClInclude Include="UserModeDefs.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Kernel.cpp" />
     <ClCompile Include="LPC.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
