@@ -2,6 +2,7 @@
 *.slo
 *.lo
 *.o
+*.obj
 
 # Compiled Dynamic libraries
 *.so
@@ -11,3 +12,15 @@
 *.lai
 *.la
 *.a
+
+*.log
+*.idb
+*.pdb
+*.lastbuildstate
+*.tlog
+*.filters
+*.user
+*.sdf
+*.ilk
+*.exe
+*.lib
