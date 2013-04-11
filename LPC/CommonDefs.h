@@ -8,8 +8,8 @@
 #include <tchar.h>
 #else
 #define RTL_USE_AVL_TABLES 0
-#include <ntifs.h>
-#include <Ntstrsafe.h>
+#include "ntifs.h"
+#include "Ntstrsafe.h"
 //#include "KernelModeDefs.h"
 #pragma comment(lib,"Ntstrsafe.lib")
 #endif

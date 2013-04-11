@@ -24,3 +24,9 @@
 *.ilk
 *.exe
 *.lib
+*.sys
+*.mac
+*.xml
+*.unsuccessfulbuild
+*.suo
+

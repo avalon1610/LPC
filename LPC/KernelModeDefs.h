@@ -1,7 +1,11 @@
 #pragma once
 #include "CommonDefs.h"
+
 typedef BOOLEAN BOOL;
 typedef DWORD * PDWORD;
+#define _Out_
+#define _In_
+#define _In_opt_
 
 extern "C"
 NTSTATUS NtConnectPort(OUT PHANDLE PortHandle,

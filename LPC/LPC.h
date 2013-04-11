@@ -68,7 +68,7 @@ FORCEINLINE VOID SafeStrCopy(LPTSTR pszDest,size_t cchDest,LPCTSTR pszSrc)
 #endif // _M_IA64
 
 //(MaxData <= 0x104) and (MaxTotal <= 0x148)
-#define MAX_MESSAGE_SIZE 0xFF
+#define MAX_MESSAGE_SIZE 0xFE
 typedef struct _TRANSFERRED_MESSAGE
 {
 	PORT_MESSAGE Header; // (0x18 -- x86)(0x28 -- x64)

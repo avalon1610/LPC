@@ -115,7 +115,7 @@ void CLPC::runServer(TCHAR *LpcPortName)
 			__leave;
 		}
 
-		RtlInitUnicodeString(&usPortName,LpcPortName);
+		RtlInitUnicodeString(&usPortName,(PCWSTR)LpcPortName);
 		InitializeObjectAttributes(&obj,&usPortName,0,NULL,NULL);
 
 		//NtCreatePort checks whether (MaxConnectionInfoLength <= 0x104) and (MaxMessageLength <= 0x148).
@@ -341,7 +341,8 @@ void CLPC::ServerProc(SERVER_INFO *si)
 		else
 		{
 			TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
-			wcscpy_s(buffer,LPCMessage->MessageText);
+			//wcscpy_s(buffer,LPCMessage->MessageText);
+			RtlCopyMemory(buffer,LPCMessage->MessageText,MAX_MESSAGE_SIZE);
 			PRINT(_T("[%08lX]:%ws\n"),ClientHandle,buffer);
 		}
 
@@ -362,7 +363,7 @@ bool CLPC::Connect(TCHAR *LpcPortName)
 		return success;
 	}
 	UNICODE_STRING usPortName;
-	RtlInitUnicodeString(&usPortName,LpcPortName);
+	RtlInitUnicodeString(&usPortName,(PCWSTR)LpcPortName);
 
 	SECURITY_QUALITY_OF_SERVICE SecurityQos;
 	REMOTE_PORT_VIEW ServerView;
@@ -521,7 +522,8 @@ bool CLPC::Send(TCHAR *msg,ULONG command)
 			else
 			{
 				TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
-				wcscpy_s(buffer,ReplyMessage.MessageText);
+				//wcscpy_s(buffer,ReplyMessage.MessageText);
+				RtlCopyMemory(buffer,ReplyMessage.MessageText,sizeof(ReplyMessage.MessageText));
 				PRINT(_T("[%08lX]:%ws\n"),ci.ServerHandle,buffer);
 			}
 		}
