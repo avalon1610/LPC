@@ -27,8 +27,8 @@ void DriverUnload(PDRIVER_OBJECT DriverObject)
 	KdPrint(("LPCTest Unloaded!\n"));
 }
 
-extern "C"
-	NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
+extern "C" 
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
 	UNREFERENCED_PARAMETER(RegPath);
@@ -39,7 +39,7 @@ extern "C"
 
 	CLPC lpcServer;
 	lpcServer.InsertCallBack(COMMAND_DOSOMETHING,talk);
-	lpcServer.runServer();
+	// lpcServer.runServer();
 
 	return STATUS_SUCCESS;
 }
