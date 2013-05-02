@@ -18,6 +18,7 @@ extern "C" {
 #define STRLEN _tcslen
 #define STRCOPY wcscpy_s
 #else
+#include "..\inc\uthash.h"
 #define PRINT(...) KdPrint((__VA_ARGS__))
 #define _T
 
@@ -245,6 +246,16 @@ extern ULONG m_AllocTag;
 }
 #endif // _cplusplus
 
+//http://troydhanson.github.io/uthash/userguide.html
+#ifdef _KERNEL_MODE
+typedef struct _KERNEL_MAP
+{
+	int command;		// key
+	PVOID callback;		
+	UT_hash_handle hh;	// make this structure hashable
+} KERNEL_MAP,*PKERNEL_MAP;
+#endif
+
 class CLPC
 {
 public:
@@ -259,9 +270,12 @@ public:
 #ifndef _KERNEL_MODE
 	static MAP CallBackList; 
 #else
-	//use it < DISPATCH_LEVEL
-	static RTL_GENERIC_TABLE CallBackList;
+	// use it < DISPATCH_LEVEL
+	// static RTL_GENERIC_TABLE CallBackList;
+	static KERNEL_MAP *CallBackList;
+	
 	void InsertCallBack(ULONG command,PVOID callback);
+	static PVOID FindCallBack(ULONG command);
 
 	void *operator new (size_t lBlockSize)
 	{

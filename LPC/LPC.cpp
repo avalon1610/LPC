@@ -14,11 +14,14 @@ CLPC::CLPC(void)
 	}
 	bOK = InitProcAddress();
 #else
+/*
 	RtlInitializeGenericTable(&CallBackList,
 							  CompareRoutine,
 							  AllocateRoutine,
 							  FreeRoutine,
 							  NULL);
+							  */
+	CallBackList = NULL;
 	bOK = FindKernelFunction();
 #endif
 	
@@ -72,12 +75,32 @@ VOID
 #endif
 
 #ifdef _KERNEL_MODE
+PVOID CLPC::FindCallBack(ULONG command)
+{
+	KERNEL_MAP *k;
+	HASH_FIND_INT(CallBackList,&command,k);
+	if (k == NULL)
+		return NULL;
+	else
+		return k;
+}
+
 void CLPC::InsertCallBack(ULONG command,PVOID callback)
 {
+	/*
 	BOOLEAN newElement = TRUE;
 	PVOID addr = RtlInsertElementGenericTable(&CallBackList,&command,sizeof(ULONG),&newElement);
 	if (addr)
 		addr = callback;
+	*/
+	KERNEL_MAP *k;
+	if (!FindCallBack(command))
+	{
+		k = (KERNEL_MAP *)MALLOC(sizeof(KERNEL_MAP));
+		k->command = command;
+		k->callback = callback;
+		HASH_ADD_INT(CallBackList,command,k);
+	}
 }
 #endif // _KERNEL_MODE
 
@@ -303,7 +326,8 @@ void CLPC::ServerProc(SERVER_INFO *si)
 #else
 			// to do ..
 			ULONG command = GET_COMMAND(LPCMessage->Command);
-			PVOID callback = RtlLookupElementGenericTable(&CallBackList,(PVOID)&command);
+			//PVOID callback = RtlLookupElementGenericTable(&CallBackList,(PVOID)&command);
+			PVOID callback = FindCallBack(command);
 			if (callback)
 			{
 				HANDLE tHandle;
@@ -543,7 +567,7 @@ _ReplyWaitReceivePortEx	CLPC::NtReplyWaitReceivePortEx = NULL;
 _RequestPort CLPC::NtRequestPort = NULL;
 _RequestWaitReplyPort CLPC::NtRequestWaitReplyPort = NULL;
 LIST_ENTRY CLPC::head;
-RTL_GENERIC_TABLE CLPC::CallBackList;
+KERNEL_MAP *CLPC::CallBackList;
 
 #ifndef _KERNEL_MODE
 MAP CLPC::CallBackList;
