@@ -5,12 +5,13 @@ extern "C" {
 #endif // _cplusplus
 
 
-#define SERVERNAME_W L"\\MY_SERVER"
-#define SERVERNAME_A  "\\MY_SERVER"
+#define SERVERNAME_W L"\\MY_LPC_SERVER"
+#define SERVERNAME_A  "\\MY_LPC_SERVER"
 
 #define LARGE_MESSAGE_SIZE 0x9000
 
 #include "CommonDefs.h"
+#pragma comment(lib,"Ntstrsafe.lib")
 
 #pragma pack(push,1)
 #ifndef _KERNEL_MODE
@@ -267,6 +268,7 @@ public:
 	bool AsyncSend(TCHAR *msg);
 	bool SyncSend(TCHAR *msg);
 	bool Send(TCHAR *msg,ULONG command);
+	static void StopServer();
 #ifndef _KERNEL_MODE
 	static MAP CallBackList; 
 #else
@@ -276,6 +278,7 @@ public:
 	
 	void InsertCallBack(ULONG command,PVOID callback);
 	static PVOID FindCallBack(ULONG command);
+	void doKernelInit();
 
 	void *operator new (size_t lBlockSize)
 	{
@@ -304,9 +307,9 @@ private:
 	static _ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx;
 	static _RequestPort				NtRequestPort;
 	static _RequestWaitReplyPort	NtRequestWaitReplyPort;
+	static _ConnectPort				NtConnectPort; //exported
 #ifndef _KERNEL_MODE
 	static _InitUnicodeString		RtlInitUnicodeString;
-	static _ConnectPort				NtConnectPort; //exported
 	static _ZwCreateSection			ZwCreateSection;
 #endif
 
@@ -319,15 +322,18 @@ private:
 	CLIENT_INFO ci;
 	static LIST_ENTRY head;
 	static void ServerProc(SERVER_INFO *);
+	static bool KeepRunning;
 	
+
 #ifdef _KERNEL_MODE
-	PRTL_GENERIC_COMPARE_ROUTINE CompareRoutine;
-	PRTL_GENERIC_ALLOCATE_ROUTINE AllocateRoutine;
-	PRTL_GENERIC_FREE_ROUTINE FreeRoutine;
+	//PRTL_GENERIC_COMPARE_ROUTINE CompareRoutine;
+	//PRTL_GENERIC_ALLOCATE_ROUTINE AllocateRoutine;
+	//PRTL_GENERIC_FREE_ROUTINE FreeRoutine;
 	bool FindKernelFunction();
 #else
 	bool InitProcAddress();
 	bool CheckWOW64();
+	
 #endif
 };
 

@@ -1,12 +1,16 @@
 #pragma once
 #include "CommonDefs.h"
 
+
 typedef BOOLEAN BOOL;
+typedef unsigned short WORD; 
+typedef unsigned char BYTE;
 typedef DWORD * PDWORD;
 #define _Out_
 #define _In_
 #define _In_opt_
 
+/*
 extern "C"
 NTSTATUS NtConnectPort(OUT PHANDLE PortHandle,
 					   IN PUNICODE_STRING PortName,
@@ -16,7 +20,7 @@ NTSTATUS NtConnectPort(OUT PHANDLE PortHandle,
 					   OUT PULONG MaxMessageLength OPTIONAL,
 					   IN OUT PVOID ConnectInformation OPTIONAL,
 					   IN OUT PULONG ConnectInformationLength OPTIONAL
-					   );
+					   );*/
 
 #pragma pack(push,1)
 typedef enum VALIDITY_CHECK_STATUS

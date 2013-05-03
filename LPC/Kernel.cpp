@@ -1,7 +1,6 @@
 #ifdef _KERNEL_MODE
 #include "KernelModeDefs.h"
 
-
 __inline ULONG CR4()
 {
 	// mov eax,cr4
@@ -266,5 +265,181 @@ ULONG GetSystemRoutineAddress(int IntType,PVOID lpwzFunction)
 
 	}
 	return ulFunction;
+}
+
+#define NtCurrentProcess() ( (HANDLE)(LONG_PTR) -1 )  
+#define ZwCurrentProcess() NtCurrentProcess()      
+
+HANDLE MapFileAsSection(PUNICODE_STRING FileName,PVOID *ModuleBase)
+{
+	NTSTATUS status;
+	HANDLE  hSection, hFile;
+	DWORD dwKSDT;
+	PVOID BaseAddress = NULL;
+	SIZE_T size=0;
+	IO_STATUS_BLOCK iosb;
+	OBJECT_ATTRIBUTES oa = {sizeof oa, 0, FileName, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE};
+	BOOL bInit = FALSE;
+
+	*ModuleBase = NULL;
+	status = ZwOpenFile(&hFile,
+						FILE_EXECUTE | SYNCHRONIZE,
+						&oa,
+						&iosb,
+						FILE_SHARE_READ,
+						FILE_SYNCHRONOUS_IO_NONALERT);
+
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("ZwOpenFile failed\n"));
+		return NULL;
+	}
+
+	oa.ObjectName = 0;
+	status = ZwCreateSection(&hSection,
+							 SECTION_ALL_ACCESS,
+							 &oa,
+							 0,
+							 PAGE_EXECUTE,
+							 SEC_IMAGE,
+							 hFile);
+	if (!NT_SUCCESS(status))
+	{
+		ZwClose(hFile);
+		KdPrint(("ZwCreateSection failed:%d\n",RtlNtStatusToDosError(status)));
+		return NULL;
+	}
+
+	status = ZwMapViewOfSection(hSection,
+								NtCurrentProcess(),
+								&BaseAddress,
+								0,
+								1000,
+								0,
+								&size,
+								(SECTION_INHERIT)1,
+								MEM_TOP_DOWN,
+								PAGE_READWRITE);
+	if (!NT_SUCCESS(status))
+	{
+		ZwClose(hFile);
+		ZwClose(hSection);
+		KdPrint(("ZwMapViewOfSection failed:%d\n",RtlNtStatusToDosError(status)));
+		return NULL;
+	}
+	ZwClose(hFile);
+	__try
+	{
+		*ModuleBase = BaseAddress;
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+	{
+		return NULL;
+	}
+	return hSection;
+}
+
+BOOL GetFunctionIndexByName(CHAR *lpszFunctionName,int *Index)
+{
+	UNICODE_STRING wsNtDllString;
+
+	HANDLE hNtSection;
+	ULONG ulNtDllModuleBase;
+	PIMAGE_DOS_HEADER pDosHeader;
+	PIMAGE_NT_HEADERS NtDllHeader;
+
+	IMAGE_OPTIONAL_HEADER opthdr;
+	DWORD *arrayOfFunctionAddresses;
+	DWORD *arrayOfFunctionNames;
+	WORD *arrayOfFunctionOrdinals;
+	DWORD functionOrdinal;
+	DWORD Base, x, functionAddress,position;
+	char* functionName;
+	IMAGE_EXPORT_DIRECTORY *pExportTable;
+	BOOL bRetOK = FALSE;
+	BOOL bInit = FALSE;
+
+	STRING lpszSearchFunction;
+	STRING lpszFunction;
+
+	__try
+	{
+		RtlInitUnicodeString(&wsNtDllString,L"\\SystemRoot\\System32\\ntdll.dll");
+		hNtSection = MapFileAsSection(&wsNtDllString,(PVOID *)&ulNtDllModuleBase);
+		if (!hNtSection)
+			return bRetOK;
+		ZwClose(hNtSection);
+
+		pDosHeader = (PIMAGE_DOS_HEADER)ulNtDllModuleBase;
+		if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+		{
+			KdPrint(("failed to find NtHeader\r\n"));
+			return bRetOK;
+		}
+
+		NtDllHeader = (PIMAGE_NT_HEADERS)(ULONG)((ULONG)pDosHeader+pDosHeader->e_lfanew);
+		if (NtDllHeader->Signature != IMAGE_NT_SIGNATURE)
+		{
+			KdPrint(("failed to find NtHeader\r\n"));
+			return bRetOK;
+		}
+
+		opthdr = NtDllHeader->OptionalHeader;
+		pExportTable = (IMAGE_EXPORT_DIRECTORY *)((BYTE*)ulNtDllModuleBase+opthdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
+		arrayOfFunctionAddresses = (DWORD*)((BYTE*)ulNtDllModuleBase+pExportTable->AddressOfFunctions);
+		arrayOfFunctionNames = (DWORD*)((BYTE*)ulNtDllModuleBase+pExportTable->AddressOfNames);
+		arrayOfFunctionOrdinals = (WORD*)((BYTE*)ulNtDllModuleBase+pExportTable->AddressOfNameOrdinals);
+	
+		Base = pExportTable->Base;
+		for (x = 0; x < pExportTable->NumberOfFunctions; x++)
+		{
+			functionName = (char *)((BYTE*)ulNtDllModuleBase + arrayOfFunctionNames[x]);
+			functionOrdinal = arrayOfFunctionOrdinals[x] + Base - 1;
+			functionAddress = (DWORD)((BYTE*)ulNtDllModuleBase + arrayOfFunctionAddresses[functionOrdinal]);
+			position = *((WORD*)(functionAddress + 1));
+
+			RtlInitString(&lpszSearchFunction,functionName);
+			RtlInitString(&lpszFunction,lpszFunctionName);
+			if (RtlCompareString(&lpszSearchFunction,&lpszFunction,TRUE) == 0)
+			{
+				KdPrint(("Find FunctionName:%s\r\nposition:%d\r\n",functionName,position));
+				*Index = position;
+				bRetOK = TRUE;
+				break;
+			}
+		}
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+	{
+
+	}
+	return bRetOK;
+}
+
+DWORD GetFunctionAddressBySSDT(DWORD index,WCHAR *zwFunctionName)
+{
+	UNICODE_STRING UnicodeFunctionName;
+	ANSI_STRING AnsiFunction;
+	char lpszFunction[128];
+
+	RtlInitUnicodeString(&UnicodeFunctionName,zwFunctionName);
+	RtlUnicodeStringToAnsiString(&AnsiFunction,&UnicodeFunctionName,TRUE);
+	RtlZeroMemory(lpszFunction,sizeof(lpszFunction));
+
+	strncpy(lpszFunction,AnsiFunction.Buffer,AnsiFunction.Length);
+	KdPrint(("Get Function Index By Name:%s\n",lpszFunction));
+	if (!GetFunctionIndexByName(lpszFunction,(int *)&index))
+	{
+		KdPrint(("Get Function Index By Name failed:%s\n",lpszFunction));
+		RtlFreeAnsiString(&AnsiFunction);
+		return NULL;
+	}
+	RtlFreeAnsiString(&AnsiFunction);
+	if (index <= KeServiceDescriptorTable->TableSize)
+	{
+		KdPrint(("index:%x %x %ws\n",index,KeServiceDescriptorTable->TableSize,zwFunctionName));
+		return KeServiceDescriptorTable->ServiceTable[index];
+	}
+	return NULL;
 }
 #endif

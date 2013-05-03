@@ -21,9 +21,11 @@ void talk(PVOID param)
 	KdPrint((msg));
 }
 
+
 void DriverUnload(PDRIVER_OBJECT DriverObject)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
+	CLPC::StopServer();
 	KdPrint(("LPCTest Unloaded!\n"));
 }
 
@@ -39,7 +41,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
 
 	CLPC lpcServer;
 	lpcServer.InsertCallBack(COMMAND_DOSOMETHING,talk);
-	// lpcServer.runServer();
+	lpcServer.runServer();
 
 	return STATUS_SUCCESS;
 }

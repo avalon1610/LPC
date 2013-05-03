@@ -45,6 +45,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='x86 kernel|Win32'">
     <OutDir>..\bin\$(ConfigurationName)\</OutDir>
+    <IncludePath>d:\WinDDK\7600.16385.1\inc\wdf;d:\WinDDK\7600.16385.1\inc\mfc42;d:\WinDDK\7600.16385.1\inc\ddk;d:\WinDDK\7600.16385.1\inc\crt;d:\WinDDK\7600.16385.1\inc\atl71;d:\WinDDK\7600.16385.1\inc\api;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>

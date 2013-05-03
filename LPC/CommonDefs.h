@@ -7,11 +7,13 @@
 #include <stdio.h>
 #include <tchar.h>
 #else
-#define RTL_USE_AVL_TABLES 0
+//#define RTL_USE_AVL_TABLES 0
 #include "ntifs.h"
 #include "Ntstrsafe.h"
+#include "ntimage.h"
 //#include "KernelModeDefs.h"
 #pragma comment(lib,"Ntstrsafe.lib")
+#define SEC_IMAGE         0x1000000
 #endif
 /*
 this header file defines all thing that could be used by ring0 and ring3

@@ -21,13 +21,22 @@ CLPC::CLPC(void)
 							  FreeRoutine,
 							  NULL);
 							  */
+/*
 	CallBackList = NULL;
 	bOK = FindKernelFunction();
+	*/
+	// in kernel mode, must do initialize explicitly
 #endif
 	
 }
 
 #ifdef _KERNEL_MODE
+void CLPC::doKernelInit()
+{
+	CallBackList = NULL;
+	bOK = FindKernelFunction();
+}
+
 #pragma LOCKEDCODE
 RTL_GENERIC_COMPARE_RESULTS
 	CompareRoutine (
@@ -111,6 +120,7 @@ void CLPC::runServer()
 
 void CLPC::runServer(TCHAR *LpcPortName)
 {
+	doKernelInit();
 	if (!bOK)
 	{
 		PRINT(_T("Initialize Failed!!!\n"));
@@ -156,14 +166,14 @@ void CLPC::runServer(TCHAR *LpcPortName)
 #ifndef _KERNEL_MODE
 		if (!CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)&ServerProc,(LPVOID)&si,0,NULL))
 		{
-			PRINT(_T("CreateThread ServerProc error:%d"),GetLastError());
+			PRINT(_T("CreateThread ServerProc error:%d\n"),GetLastError());
 		}
 #else
 		HANDLE ThreadHandle;
 		status = PsCreateSystemThread(&ThreadHandle,0,NULL,NULL,NULL,(PKSTART_ROUTINE)&ServerProc,(PVOID)&si);
 		if (!NT_SUCCESS(status))
 		{
-			PRINT("PsCreateSystemThread Error:0x%X",status);
+			PRINT("PsCreateSystemThread Error:0x%X\n",status);
 			__leave;
 		}
 
@@ -189,7 +199,7 @@ void CLPC::ServerProc(SERVER_INFO *si)
 	PORT_VIEW ServerView;
 	HANDLE DataPortHandle = NULL;
 	REMOTE_PORT_VIEW ClientView;
-	bool isExist,KeepRunning = true;
+	bool isExist = true;
 	HANDLE ClientHandle = NULL;
 	
 	//
@@ -268,13 +278,14 @@ void CLPC::ServerProc(SERVER_INFO *si)
 			continue;
 		}
 
+		
 		//normal message handle
 		if (!isExist)
 		{
 			PRINT(_T("client [%08lX] not found,you should connect first..\n"),ClientHandle);
 			continue;
 		}
-
+		
 		LPCMessage = (PTRANSFERRED_MESSAGE)MessageHeader;
 		if (IS_COMMAND_RESERVE(LPCMessage->Command))
 		{
@@ -317,7 +328,7 @@ void CLPC::ServerProc(SERVER_INFO *si)
 
 					TRANSFERRED_MESSAGE replayMsg;
 					RtlCopyMemory(&replayMsg,LPCMessage,sizeof(TRANSFERRED_MESSAGE));
-					wcscpy_s(replayMsg.MessageText,_T("Server Answer!"));
+					STRCOPY(replayMsg.MessageText,_T("Server Answer!"));
 					status = NtReplyPort(ClientHandle,&replayMsg.Header);
 					if (!NT_SUCCESS(status))
 						PRINT(_T("Reply Error: 0x%08lX\n"),status);
@@ -351,31 +362,38 @@ void CLPC::ServerProc(SERVER_INFO *si)
 			}
 			else
 				PRINT(_T("Can't find callback function using %d\n"),LPCMessage->Command);
-
-#endif
+#endif	
 		}
-
+		
+		TCHAR *buffer = (TCHAR *)MALLOC(sizeof(TCHAR)*LARGE_MESSAGE_SIZE);
 		if (LPCMessage->UseSection)
 		{
 			PRINT(_T("[Received Large Data]\n"));
-			TCHAR buffer[LARGE_MESSAGE_SIZE] = {0};
+			//TCHAR buffer[LARGE_MESSAGE_SIZE] = {0};
 			RtlCopyMemory(buffer,ConnectedClient->ClientView.ViewBase,ConnectedClient->ClientView.ViewSize);
 			PRINT(_T("[%08lX]:%ws\n"),ClientHandle,buffer);
 		}
 		else
 		{
-			TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
+			//TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
 			//wcscpy_s(buffer,LPCMessage->MessageText);
 			RtlCopyMemory(buffer,LPCMessage->MessageText,MAX_MESSAGE_SIZE);
 			PRINT(_T("[%08lX]:%ws\n"),ClientHandle,buffer);
 		}
-
+		
+		FREE(buffer);
 	} //end of while
 
 	FREE(LPCMessage);
+
 #ifdef _KERNEL_MODE
 	PsTerminateSystemThread(STATUS_SUCCESS);
 #endif
+}
+
+void CLPC::StopServer()
+{
+	KeepRunning = false;
 }
 
 bool CLPC::Connect(TCHAR *LpcPortName)
@@ -556,7 +574,7 @@ bool CLPC::Send(TCHAR *msg,ULONG command)
 	return NT_SUCCESS(status);
 }
 
-
+_ConnectPort CLPC::NtConnectPort = NULL;
 _CreatePort CLPC::NtCreatePort = NULL;
 _ListenPort	CLPC::NtListenPort = NULL;
 _AcceptConnectPort CLPC::NtAcceptConnectPort = NULL;
@@ -568,6 +586,7 @@ _RequestPort CLPC::NtRequestPort = NULL;
 _RequestWaitReplyPort CLPC::NtRequestWaitReplyPort = NULL;
 LIST_ENTRY CLPC::head;
 KERNEL_MAP *CLPC::CallBackList;
+bool CLPC::KeepRunning = true;
 
 #ifndef _KERNEL_MODE
 MAP CLPC::CallBackList;
@@ -616,18 +635,20 @@ bool CLPC::CheckWOW64()
 };
 #else
 ULONG GetSystemRoutineAddress(int,PVOID);
+DWORD GetFunctionAddressBySSDT(DWORD,WCHAR *);
 
 bool CLPC::FindKernelFunction()
 {
-	NtCreatePort = (_CreatePort)GetSystemRoutineAddress(0,"NtCreatePort");
-	NtListenPort = (_ListenPort)GetSystemRoutineAddress(0,"NtListenPort");
-	NtAcceptConnectPort = (_AcceptConnectPort)GetSystemRoutineAddress(0,"NtAcceptConnectPort");
-	NtCompleteConnectPort = (_CompleteConnectPort)GetSystemRoutineAddress(0,"NtCompleteConnectPort");
-	NtReplyPort = (_ReplyPort)GetSystemRoutineAddress(0,"NtReplyPort");
-	NtReplyWaitReceivePort = (_ReplyWaitReceivePort)GetSystemRoutineAddress(0,"NtReplyWaitReceivePort");
-	NtReplyWaitReceivePortEx = (_ReplyWaitReceivePortEx)GetSystemRoutineAddress(0,"NtReplyWaitReceivePortEx");
-	NtRequestPort = (_RequestPort)GetSystemRoutineAddress(0,"NtRequestPort");
-	NtRequestWaitReplyPort = (_RequestWaitReplyPort)GetSystemRoutineAddress(0,"NtRequestWaitReplyPort");
+	NtConnectPort = (_ConnectPort)GetSystemRoutineAddress(0,"NtConnectPort");
+	NtCreatePort = (_CreatePort)GetFunctionAddressBySSDT(0,L"NtCreatePort");
+	NtListenPort = (_ListenPort)GetFunctionAddressBySSDT(0,L"NtListenPort");
+	NtAcceptConnectPort = (_AcceptConnectPort)GetFunctionAddressBySSDT(0,L"NtAcceptConnectPort");
+	NtCompleteConnectPort = (_CompleteConnectPort)GetFunctionAddressBySSDT(0,L"NtCompleteConnectPort");
+	NtReplyPort = (_ReplyPort)GetFunctionAddressBySSDT(0,L"NtReplyPort");
+	NtReplyWaitReceivePort = (_ReplyWaitReceivePort)GetFunctionAddressBySSDT(0,L"NtReplyWaitReceivePort");
+	NtReplyWaitReceivePortEx = (_ReplyWaitReceivePortEx)GetFunctionAddressBySSDT(0,L"NtReplyWaitReceivePortEx");
+	NtRequestPort = (_RequestPort)GetFunctionAddressBySSDT(0,L"NtRequestPort");
+	NtRequestWaitReplyPort = (_RequestWaitReplyPort)GetFunctionAddressBySSDT(0,L"NtRequestWaitReplyPort");
 
 	if (NtCreatePort && NtListenPort && NtAcceptConnectPort && NtCompleteConnectPort && NtReplyPort && NtRequestWaitReplyPort &&
 		NtReplyWaitReceivePort && NtReplyWaitReceivePortEx && NtRequestPort && NtRequestWaitReplyPort)
