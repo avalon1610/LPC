@@ -1,10 +1,5 @@
 #pragma once
 
-#ifdef _cplusplus
-extern "C" {
-#endif // _cplusplus
-
-
 #define SERVERNAME_W L"\\MY_LPC_SERVER"
 #define SERVERNAME_A  "\\MY_LPC_SERVER"
 
@@ -243,10 +238,6 @@ extern ULONG m_AllocTag;
 #define FREE(x)	ExFreePoolWithTag(x,m_AllocTag)
 #endif
 
-#ifdef _cplusplus
-}
-#endif // _cplusplus
-
 //http://troydhanson.github.io/uthash/userguide.html
 #ifdef _KERNEL_MODE
 typedef struct _KERNEL_MAP
@@ -257,84 +248,58 @@ typedef struct _KERNEL_MAP
 } KERNEL_MAP,*PKERNEL_MAP;
 #endif
 
-class CLPC
-{
-public:
-	CLPC(void);
-	virtual ~CLPC(void) {};
-	void runServer(TCHAR *ServerName);
-	void runServer();
-	bool Connect(TCHAR *ServerName);
-	bool AsyncSend(TCHAR *msg);
-	bool SyncSend(TCHAR *msg);
-	bool Send(TCHAR *msg,ULONG command);
-	static void StopServer();
+
+void runServer(TCHAR *ServerName);
+BOOL Connect(TCHAR *ServerName);
+BOOL AsyncSend(TCHAR *msg);
+BOOL SyncSend(TCHAR *msg);
+BOOL Send(TCHAR *msg,ULONG command);
+void StopServer();
+
 #ifndef _KERNEL_MODE
-	static MAP CallBackList; 
+ MAP CallBackList; 
 #else
-	// use it < DISPATCH_LEVEL
-	// static RTL_GENERIC_TABLE CallBackList;
-	static KERNEL_MAP *CallBackList;
+// use it < DISPATCH_LEVEL
+//  RTL_GENERIC_TABLE CallBackList;
+ KERNEL_MAP *CallBackList;
 	
-	void InsertCallBack(ULONG command,PVOID callback);
-	static PVOID FindCallBack(ULONG command);
-	void doKernelInit();
-
-	void *operator new (size_t lBlockSize)
-	{
-		PAGED_CODE();
-		return ExAllocatePoolWithTag(PagedPool, lBlockSize, m_AllocTag);
-	}
-
-	void operator delete(void *p)
-	{
-		PAGED_CODE();
-		if (!p)
-			return;
-		ExFreePoolWithTag(p, m_AllocTag);
-	}
+void InsertCallBack(ULONG command,PVOID callback);
+ PVOID FindCallBack(ULONG command);
 
 #endif
-	void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
+void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
 
-private:
-	static _CreatePort				NtCreatePort;
-	static _ListenPort				NtListenPort;
-	static _AcceptConnectPort		NtAcceptConnectPort;
-	static _CompleteConnectPort		NtCompleteConnectPort;
-	static _ReplyPort				NtReplyPort;
-	static _ReplyWaitReceivePort	NtReplyWaitReceivePort;
-	static _ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx;
-	static _RequestPort				NtRequestPort;
-	static _RequestWaitReplyPort	NtRequestWaitReplyPort;
-	static _ConnectPort				NtConnectPort; //exported
+ _CreatePort				NtCreatePort;
+ _ListenPort				NtListenPort;
+ _AcceptConnectPort		NtAcceptConnectPort;
+ _CompleteConnectPort		NtCompleteConnectPort;
+ _ReplyPort				NtReplyPort;
+ _ReplyWaitReceivePort	NtReplyWaitReceivePort;
+ _ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx;
+ _RequestPort				NtRequestPort;
+ _RequestWaitReplyPort	NtRequestWaitReplyPort;
+ _ConnectPort				NtConnectPort; //exported
 #ifndef _KERNEL_MODE
-	static _InitUnicodeString		RtlInitUnicodeString;
-	static _ZwCreateSection			ZwCreateSection;
+ _InitUnicodeString		RtlInitUnicodeString;
+ _ZwCreateSection			ZwCreateSection;
 #endif
 
-	bool bOK;
-	
-	HANDLE hConnectPort;
-	HANDLE SectionHandle;
-	HANDLE hThread;
-	SERVER_INFO si;
-	CLIENT_INFO ci;
-	static LIST_ENTRY head;
-	static void ServerProc(SERVER_INFO *);
-	static bool KeepRunning;
+HANDLE hConnectPort;
+HANDLE SectionHandle;
+HANDLE hThread;
+SERVER_INFO si;
+CLIENT_INFO ci;
+LIST_ENTRY head;
+void ServerProc(SERVER_INFO *);
+BOOL KeepRunning;
 	
 
 #ifdef _KERNEL_MODE
-	//PRTL_GENERIC_COMPARE_ROUTINE CompareRoutine;
-	//PRTL_GENERIC_ALLOCATE_ROUTINE AllocateRoutine;
-	//PRTL_GENERIC_FREE_ROUTINE FreeRoutine;
-	bool FindKernelFunction();
+BOOL FindKernelFunction();
 #else
-	bool InitProcAddress();
-	bool CheckWOW64();
+BOOL InitProcAddress();
+BOOL CheckWOW64();
 	
 #endif
-};
 
 #pragma pack(pop)

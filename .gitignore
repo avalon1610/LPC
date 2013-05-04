@@ -29,4 +29,6 @@
 *.xml
 *.unsuccessfulbuild
 *.suo
+*.err
+*.wrn
 

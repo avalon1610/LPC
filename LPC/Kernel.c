@@ -1,6 +1,8 @@
 #ifdef _KERNEL_MODE
 #include "KernelModeDefs.h"
 
+extern BOOL Debug;
+
 __inline ULONG CR4()
 {
 	// mov eax,cr4
@@ -402,7 +404,8 @@ BOOL GetFunctionIndexByName(CHAR *lpszFunctionName,int *Index)
 			RtlInitString(&lpszFunction,lpszFunctionName);
 			if (RtlCompareString(&lpszSearchFunction,&lpszFunction,TRUE) == 0)
 			{
-				KdPrint(("Find FunctionName:%s\r\nposition:%d\r\n",functionName,position));
+				if (Debug)
+					KdPrint(("Find FunctionName:%s\r\nposition:%d\r\n",functionName,position));
 				*Index = position;
 				bRetOK = TRUE;
 				break;
@@ -427,7 +430,8 @@ DWORD GetFunctionAddressBySSDT(DWORD index,WCHAR *zwFunctionName)
 	RtlZeroMemory(lpszFunction,sizeof(lpszFunction));
 
 	strncpy(lpszFunction,AnsiFunction.Buffer,AnsiFunction.Length);
-	KdPrint(("Get Function Index By Name:%s\n",lpszFunction));
+	if (Debug)
+		KdPrint(("Get Function Index By Name:%s\n",lpszFunction));
 	if (!GetFunctionIndexByName(lpszFunction,(int *)&index))
 	{
 		KdPrint(("Get Function Index By Name failed:%s\n",lpszFunction));
@@ -437,7 +441,8 @@ DWORD GetFunctionAddressBySSDT(DWORD index,WCHAR *zwFunctionName)
 	RtlFreeAnsiString(&AnsiFunction);
 	if (index <= KeServiceDescriptorTable->TableSize)
 	{
-		KdPrint(("index:%x %x %ws\n",index,KeServiceDescriptorTable->TableSize,zwFunctionName));
+		if (Debug)
+			KdPrint(("index:%x %x %ws\n",index,KeServiceDescriptorTable->TableSize,zwFunctionName));
 		return KeServiceDescriptorTable->ServiceTable[index];
 	}
 	return NULL;

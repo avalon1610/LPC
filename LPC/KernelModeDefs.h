@@ -173,4 +173,4 @@ typedef struct _SERVICE_DESCRIPTOR_TABLE
 
 #pragma pack(pop)
 
-extern "C" PSERVICE_DESCRIPTOR_TABLE KeServiceDescriptorTable;
+extern PSERVICE_DESCRIPTOR_TABLE KeServiceDescriptorTable;

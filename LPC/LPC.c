@@ -1,42 +1,16 @@
 #include "LPC.h"
 
 ULONG m_AllocTag = ' ZAR';
-
-CLPC::CLPC(void)
-{
-	RtlZeroMemory(&ci,sizeof(CLIENT_INFO));
-	RtlZeroMemory(&si,sizeof(SERVER_INFO));
-#ifndef _KERNEL_MODE
-	if (CheckWOW64())
-	{
-		bOK = false;
-		return;
-	}
-	bOK = InitProcAddress();
-#else
-/*
-	RtlInitializeGenericTable(&CallBackList,
-							  CompareRoutine,
-							  AllocateRoutine,
-							  FreeRoutine,
-							  NULL);
-							  */
-/*
-	CallBackList = NULL;
-	bOK = FindKernelFunction();
-	*/
-	// in kernel mode, must do initialize explicitly
-#endif
-	
-}
+BOOL Debug = FALSE;
 
 #ifdef _KERNEL_MODE
-void CLPC::doKernelInit()
+BOOL doKernelInit()
 {
 	CallBackList = NULL;
-	bOK = FindKernelFunction();
+	return FindKernelFunction();
 }
 
+/*
 #pragma LOCKEDCODE
 RTL_GENERIC_COMPARE_RESULTS
 	CompareRoutine (
@@ -81,10 +55,30 @@ VOID
 	UNREFERENCED_PARAMETER(Table);
 	FREE(Buffer);
 }
+*/
 #endif
 
+BOOL Initialize(void)
+{
+	BOOL bOK = FALSE;
+	RtlZeroMemory(&ci,sizeof(CLIENT_INFO));
+	RtlZeroMemory(&si,sizeof(SERVER_INFO));
+#ifndef _KERNEL_MODE
+	if (CheckWOW64())
+	{
+		bOK = false;
+		return;
+	}
+	bOK = InitProcAddress();
+#else
+	// in kernel mode, must do initialize explicitly
+	bOK = doKernelInit();
+#endif
+	return bOK;
+}
+
 #ifdef _KERNEL_MODE
-PVOID CLPC::FindCallBack(ULONG command)
+PVOID FindCallBack(ULONG command)
 {
 	KERNEL_MAP *k;
 	HASH_FIND_INT(CallBackList,&command,k);
@@ -94,7 +88,7 @@ PVOID CLPC::FindCallBack(ULONG command)
 		return k;
 }
 
-void CLPC::InsertCallBack(ULONG command,PVOID callback)
+void InsertCallBack(ULONG command,PVOID callback)
 {
 	/*
 	BOOLEAN newElement = TRUE;
@@ -113,15 +107,12 @@ void CLPC::InsertCallBack(ULONG command,PVOID callback)
 }
 #endif // _KERNEL_MODE
 
-void CLPC::runServer()
+void runServer(TCHAR *LpcPortName)
 {
-	runServer((TCHAR *)SERVERNAME_W);
-}
+	if (LpcPortName == NULL)
+		LpcPortName = SERVERNAME_W;
 
-void CLPC::runServer(TCHAR *LpcPortName)
-{
-	doKernelInit();
-	if (!bOK)
+	if (!Initialize())
 	{
 		PRINT(_T("Initialize Failed!!!\n"));
 		return;
@@ -179,7 +170,7 @@ void CLPC::runServer(TCHAR *LpcPortName)
 
 		ZwClose(ThreadHandle);
 #endif
-		PRINT(_T("Listening to Port \"%s\",wait for connect...\n"),LpcPortName);
+		PRINT(_T("Listening to Port \"%S\",wait for connect...\n"),LpcPortName);
 	}
 	__finally
 	{
@@ -187,7 +178,7 @@ void CLPC::runServer(TCHAR *LpcPortName)
 	}
 }
 
-void CLPC::ServerProc(SERVER_INFO *si)
+void ServerProc(SERVER_INFO *si)
 {
 	HANDLE ConnectionHandle = si->LPCPortHandle;
 	//PORT_MESSAGE *MessageHeader = (PORT_MESSAGE *)MALLOC(sizeof(PORT_MESSAGE));
@@ -199,7 +190,7 @@ void CLPC::ServerProc(SERVER_INFO *si)
 	PORT_VIEW ServerView;
 	HANDLE DataPortHandle = NULL;
 	REMOTE_PORT_VIEW ClientView;
-	bool isExist = true;
+	BOOL isExist = true;
 	HANDLE ClientHandle = NULL;
 	
 	//
@@ -385,20 +376,21 @@ void CLPC::ServerProc(SERVER_INFO *si)
 	} //end of while
 
 	FREE(LPCMessage);
+	NtClose(ConnectionHandle);
 
 #ifdef _KERNEL_MODE
 	PsTerminateSystemThread(STATUS_SUCCESS);
 #endif
 }
 
-void CLPC::StopServer()
+void StopServer()
 {
 	KeepRunning = false;
 }
 
-bool CLPC::Connect(TCHAR *LpcPortName)
+BOOL Connect(TCHAR *LpcPortName)
 {
-	bool success = false;
+	BOOL success = false;
 	if (!bOK)
 	{
 		PRINT(_T("Initialize Failed!!!\n"));
@@ -485,17 +477,17 @@ bool CLPC::Connect(TCHAR *LpcPortName)
 }
 
 
-bool CLPC::AsyncSend(TCHAR *msg)
+BOOL AsyncSend(TCHAR *msg)
 {
 	return Send(msg,LPC_COMMAND_REQUEST_NOREPLY);
 }
 
-bool CLPC::SyncSend(TCHAR *msg)
+BOOL SyncSend(TCHAR *msg)
 {
 	return Send(msg,LPC_COMMAND_REQUEST_REPLY);
 }
 
-bool CLPC::Send(TCHAR *msg,ULONG command)
+BOOL Send(TCHAR *msg,ULONG command)
 {
 	TRANSFERRED_MESSAGE Message;
 	ULONG MessageLength = sizeof(TRANSFERRED_MESSAGE);
@@ -574,26 +566,26 @@ bool CLPC::Send(TCHAR *msg,ULONG command)
 	return NT_SUCCESS(status);
 }
 
-_ConnectPort CLPC::NtConnectPort = NULL;
-_CreatePort CLPC::NtCreatePort = NULL;
-_ListenPort	CLPC::NtListenPort = NULL;
-_AcceptConnectPort CLPC::NtAcceptConnectPort = NULL;
-_CompleteConnectPort CLPC::NtCompleteConnectPort = NULL;
-_ReplyPort CLPC::NtReplyPort = NULL;
-_ReplyWaitReceivePort CLPC::NtReplyWaitReceivePort = NULL;
-_ReplyWaitReceivePortEx	CLPC::NtReplyWaitReceivePortEx = NULL;
-_RequestPort CLPC::NtRequestPort = NULL;
-_RequestWaitReplyPort CLPC::NtRequestWaitReplyPort = NULL;
-LIST_ENTRY CLPC::head;
-KERNEL_MAP *CLPC::CallBackList;
-bool CLPC::KeepRunning = true;
+_ConnectPort NtConnectPort = NULL;
+_CreatePort NtCreatePort = NULL;
+_ListenPort	NtListenPort = NULL;
+_AcceptConnectPort NtAcceptConnectPort = NULL;
+_CompleteConnectPort NtCompleteConnectPort = NULL;
+_ReplyPort NtReplyPort = NULL;
+_ReplyWaitReceivePort NtReplyWaitReceivePort = NULL;
+_ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx = NULL;
+_RequestPort NtRequestPort = NULL;
+_RequestWaitReplyPort NtRequestWaitReplyPort = NULL;
+LIST_ENTRY head;
+KERNEL_MAP *CallBackList;
+BOOL KeepRunning = true;
 
 #ifndef _KERNEL_MODE
-MAP CLPC::CallBackList;
-_InitUnicodeString CLPC::RtlInitUnicodeString = NULL;
-_ConnectPort CLPC::NtConnectPort = NULL;
-_ZwCreateSection CLPC::ZwCreateSection = NULL;
-bool CLPC::InitProcAddress()
+MAP CallBackList;
+_InitUnicodeString RtlInitUnicodeString = NULL;
+_ConnectPort NtConnectPort = NULL;
+_ZwCreateSection ZwCreateSection = NULL;
+BOOL InitProcAddress()
 {
 	HMODULE hModule = GetModuleHandle(L"ntdll.dll");
 	if (hModule != NULL)
@@ -619,7 +611,7 @@ bool CLPC::InitProcAddress()
 	return false;
 }
 
-bool CLPC::CheckWOW64()
+BOOL CheckWOW64()
 {
 	BOOL isUnderWOW64;
 	if (IsWow64Process(GetCurrentProcess(),&isUnderWOW64))
@@ -637,7 +629,7 @@ bool CLPC::CheckWOW64()
 ULONG GetSystemRoutineAddress(int,PVOID);
 DWORD GetFunctionAddressBySSDT(DWORD,WCHAR *);
 
-bool CLPC::FindKernelFunction()
+BOOL FindKernelFunction()
 {
 	NtConnectPort = (_ConnectPort)GetSystemRoutineAddress(0,"NtConnectPort");
 	NtCreatePort = (_CreatePort)GetFunctionAddressBySSDT(0,L"NtCreatePort");
@@ -651,14 +643,14 @@ bool CLPC::FindKernelFunction()
 	NtRequestWaitReplyPort = (_RequestWaitReplyPort)GetFunctionAddressBySSDT(0,L"NtRequestWaitReplyPort");
 
 	if (NtCreatePort && NtListenPort && NtAcceptConnectPort && NtCompleteConnectPort && NtReplyPort && NtRequestWaitReplyPort &&
-		NtReplyWaitReceivePort && NtReplyWaitReceivePortEx && NtRequestPort && NtRequestWaitReplyPort)
+		NtReplyWaitReceivePort && NtReplyWaitReceivePortEx && NtRequestPort && NtRequestWaitReplyPort && NtConnectPort)
 		return true;
 
 	return false;
 }
 #endif
 
-void CLPC::Control( ULONG command,ULONG method, TCHAR *msg )
+void Control( ULONG command,ULONG method, TCHAR *msg )
 {
 	SET_COMMAND(command,method);
 	Send(msg,command);

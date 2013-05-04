@@ -25,11 +25,10 @@ void talk(PVOID param)
 void DriverUnload(PDRIVER_OBJECT DriverObject)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
-	CLPC::StopServer();
+	StopServer();
 	KdPrint(("LPCTest Unloaded!\n"));
 }
 
-extern "C" 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
@@ -39,9 +38,8 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
 		DriverObject->MajorFunction[i] = DefaultDispatch;
 	DriverObject->DriverUnload = DriverUnload;  
 
-	CLPC lpcServer;
-	lpcServer.InsertCallBack(COMMAND_DOSOMETHING,talk);
-	lpcServer.runServer();
+	InsertCallBack(COMMAND_DOSOMETHING,talk);
+	runServer();
 
 	return STATUS_SUCCESS;
 }
