@@ -1,7 +1,7 @@
 #pragma once
 
-#define SERVERNAME_W L"\\MY_LPC_SERVER_1"
-#define SERVERNAME_A  "\\MY_LPC_SERVER_1"
+#define SERVERNAME_W L"\\MY_LPC_SERVER"
+#define SERVERNAME_A  "\\MY_LPC_SERVER"
 
 #define LARGE_MESSAGE_SIZE 0x9000
 

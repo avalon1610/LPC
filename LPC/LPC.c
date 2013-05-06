@@ -375,21 +375,29 @@ void ServerProc(SERVER_INFO *si)
 	
 }
 
-void StopServer()
+void StopServer(TCHAR *ServerName)
 {
 	// this is for server clsoe itself
 	TRANSFERRED_MESSAGE Message;
-	PORT_MESSAGE ShutdownMsg;
+	PORT_MESSAGE ReplyMessage;
 	NTSTATUS status;
-	ULONG MessageLength = sizeof(PORT_MESSAGE);
+	ULONG MessageLength = sizeof(TRANSFERRED_MESSAGE);
+	HANDLE PortHandle;
+	UNICODE_STRING usServerName;
+	SECURITY_QUALITY_OF_SERVICE SecurityQos;
+	RtlZeroMemory(&SecurityQos,sizeof(SECURITY_QUALITY_OF_SERVICE));
+	SecurityQos.Length = sizeof(SECURITY_QUALITY_OF_SERVICE);
 
-	RtlZeroMemory(&ShutdownMsg,MessageLength);
-	InitializeMessageHeader(&ShutdownMsg,MessageLength,LPC_PORT_CLOSED);
+	RtlInitUnicodeString(&usServerName,(PCWSTR)ServerName);
+
+	RtlZeroMemory(&Message,MessageLength);
+	InitializeMessageHeader(&Message.Header,MessageLength,LPC_PORT_CLOSED);
 	
-	status = NtRequestPort(si.ServerThreadHandle, &ShutdownMsg);
+	status = NtRequestWaitReplyPort(si.LPCPortHandle,&Message.Header,&ReplyMessage);
 	if (!NT_SUCCESS(status))
 	{
-		PRINT(_T("NtRequestPort error 0x%08lX\n"), status);
+		PRINT(_T("NtConnectPort error 0x%08lX\n"), status);
+		return;
 	}
 	
 	KeepRunning = FALSE;

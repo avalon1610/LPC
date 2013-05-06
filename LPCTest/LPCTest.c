@@ -25,7 +25,7 @@ void talk(PVOID param)
 void DriverUnload(PDRIVER_OBJECT DriverObject)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
-	StopServer();
+	StopServer((TCHAR *)SERVERNAME_W);
 	KdPrint(("LPCTest Unloaded!\n"));
 }
 
