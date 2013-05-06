@@ -1,8 +1,17 @@
 #pragma once
+#include <stdio.h>
+#include <tchar.h>
 #include <map>
+#include <windows.h>
 
+#define FORCEINLINE __forceinline
+#define VOID void
+#define CONST const
 #define NTSTATUS LONG
 #define NTAPI __stdcall
+
+#define IN
+#define OUT
 
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 
@@ -153,7 +162,7 @@ FORCEINLINE
 	VOID
 	InsertTailList(
 	_Inout_ PLIST_ENTRY ListHead,
-	_Inout_ __drv_aliasesMem PLIST_ENTRY Entry
+	_Inout_ PLIST_ENTRY Entry
 	)
 {
 
@@ -172,7 +181,7 @@ FORCEINLINE
 	VOID
 	InsertHeadList(
 	_Inout_ PLIST_ENTRY ListHead,
-	_Inout_ __drv_aliasesMem PLIST_ENTRY Entry
+	_Inout_ PLIST_ENTRY Entry
 	)
 {
 

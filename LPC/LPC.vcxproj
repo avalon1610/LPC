@@ -127,7 +127,7 @@
     <IntDir>$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug x86|Win32'">
-    <OutDir>..\lib\$(Platform)\</OutDir>
+    <OutDir>..\lib_r3\$(Platform)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='x86 kernel|Win32'">
     <OutDir>..\lib\$(ConfigurationName)\</OutDir>
@@ -140,6 +140,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug x64|Win32'">
     <IncludePath>D:\WinDDK\7600.16385.1\inc\wdf;D:\WinDDK\7600.16385.1\inc\mfc42;D:\WinDDK\7600.16385.1\inc\crt;D:\WinDDK\7600.16385.1\inc\atl71;D:\WinDDK\7600.16385.1\inc\api;D:\WinDDK\7600.16385.1\inc\ddk;$(IncludePath)</IncludePath>
+    <OutDir>..\lib_r3\$(Platform)\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug x86|x64'">
     <ClCompile>
@@ -178,6 +179,8 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <CompileAs>CompileAsCpp</CompileAs>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -222,7 +225,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalOptions>/D "_KERNEL_MODE" %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -268,7 +270,9 @@
     <ClInclude Include="UserModeDefs.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Kernel.c" />
+    <ClCompile Include="Kernel.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug x86|Win32'">CompileAsCpp</CompileAs>
+    </ClCompile>
     <ClCompile Include="LPC.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -1,11 +1,7 @@
 #pragma once
 
 #ifndef _KERNEL_MODE
-#include <windows.h>
 #include "UserModeDefs.h"
-//#include <map>
-#include <stdio.h>
-#include <tchar.h>
 #else
 //#define RTL_USE_AVL_TABLES 0
 #include "ntifs.h"
@@ -19,9 +15,6 @@
 this header file defines all thing that could be used by ring0 and ring3
 for example, simple convention of connection , user-defined struct ,  macros , and so on
 */
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 //
 // Define header for Port Message
@@ -94,11 +87,6 @@ typedef struct _REMOTE_PORT_VIEW {
 	PVOID  ViewBase;                    // Base address of the view
 
 } REMOTE_PORT_VIEW, *PREMOTE_PORT_VIEW;
-
-
-#ifdef __cplusplus
-}
-#endif // _cplusplus
 
 #ifdef _KERNEL_MODE
 #include "KernelModeDefs.h"

@@ -1,12 +1,11 @@
 #pragma once
 
-#define SERVERNAME_W L"\\MY_LPC_SERVER"
-#define SERVERNAME_A  "\\MY_LPC_SERVER"
+#define SERVERNAME_W L"\\MY_LPC_SERVER_1"
+#define SERVERNAME_A  "\\MY_LPC_SERVER_1"
 
 #define LARGE_MESSAGE_SIZE 0x9000
 
 #include "CommonDefs.h"
-#pragma comment(lib,"Ntstrsafe.lib")
 
 #pragma pack(push,1)
 #ifndef _KERNEL_MODE
@@ -14,6 +13,7 @@
 #define STRLEN _tcslen
 #define STRCOPY wcscpy_s
 #else
+#pragma comment(lib,"Ntstrsafe.lib")
 #include "..\inc\uthash.h"
 #define PRINT(...) KdPrint((__VA_ARGS__))
 #define _T
@@ -31,7 +31,7 @@ FORCEINLINE VOID SafeStrCopy(LPTSTR pszDest,size_t cchDest,LPCTSTR pszSrc)
 {
 	NTSTATUS status = RtlStringCchCopyW((NTSTRSAFE_PWSTR)pszDest,cchDest,(NTSTRSAFE_PCWSTR)pszSrc);
 	if (!NT_SUCCESS(status))
-		*pszDest = NULL;
+		*pszDest = '\0';
 }
 
 #define STRLEN(x) SafeStrlen(x)
@@ -212,6 +212,7 @@ typedef struct _SERVER_INFO
 {
 	HANDLE LPCPortHandle;	// connection port
 	HANDLE SectionHandle;
+	HANDLE ServerThreadHandle;	// Server thread handle
 	PORT_VIEW ServerView;
 }SERVER_INFO,*PSERVER_INFO;
 
@@ -246,60 +247,16 @@ typedef struct _KERNEL_MAP
 	PVOID callback;		
 	UT_hash_handle hh;	// make this structure hashable
 } KERNEL_MAP,*PKERNEL_MAP;
+#else
+void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
 #endif
 
-
+void InsertCallBack(ULONG command,PVOID callback);
 void runServer(TCHAR *ServerName);
 BOOL Connect(TCHAR *ServerName);
 BOOL AsyncSend(TCHAR *msg);
 BOOL SyncSend(TCHAR *msg);
 BOOL Send(TCHAR *msg,ULONG command);
 void StopServer();
-
-#ifndef _KERNEL_MODE
- MAP CallBackList; 
-#else
-// use it < DISPATCH_LEVEL
-//  RTL_GENERIC_TABLE CallBackList;
- KERNEL_MAP *CallBackList;
-	
-void InsertCallBack(ULONG command,PVOID callback);
- PVOID FindCallBack(ULONG command);
-
-#endif
-void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
-
- _CreatePort				NtCreatePort;
- _ListenPort				NtListenPort;
- _AcceptConnectPort		NtAcceptConnectPort;
- _CompleteConnectPort		NtCompleteConnectPort;
- _ReplyPort				NtReplyPort;
- _ReplyWaitReceivePort	NtReplyWaitReceivePort;
- _ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx;
- _RequestPort				NtRequestPort;
- _RequestWaitReplyPort	NtRequestWaitReplyPort;
- _ConnectPort				NtConnectPort; //exported
-#ifndef _KERNEL_MODE
- _InitUnicodeString		RtlInitUnicodeString;
- _ZwCreateSection			ZwCreateSection;
-#endif
-
-HANDLE hConnectPort;
-HANDLE SectionHandle;
-HANDLE hThread;
-SERVER_INFO si;
-CLIENT_INFO ci;
-LIST_ENTRY head;
-void ServerProc(SERVER_INFO *);
-BOOL KeepRunning;
-	
-
-#ifdef _KERNEL_MODE
-BOOL FindKernelFunction();
-#else
-BOOL InitProcAddress();
-BOOL CheckWOW64();
-	
-#endif
 
 #pragma pack(pop)

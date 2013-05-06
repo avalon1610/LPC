@@ -25,9 +25,8 @@ void talk(LPVOID param)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	CLPC lpcServer;
-	lpcServer.CallBackList[COMMAND_DOSOMETHING] = talk;
-	lpcServer.runServer();
+	InsertCallBack(COMMAND_DOSOMETHING,talk);
+	runServer(SERVERNAME_W);
 	wait();
 	return 0;
 }

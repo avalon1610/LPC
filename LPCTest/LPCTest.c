@@ -4,8 +4,8 @@
 
 NTSTATUS DefaultDispatch(PDEVICE_OBJECT DeviceObject,PIRP Irp)
 {
-	UNREFERENCED_PARAMETER(DeviceObject);
 	NTSTATUS status = STATUS_SUCCESS;
+	UNREFERENCED_PARAMETER(DeviceObject);
 	Irp->IoStatus.Status = status;
 	Irp->IoStatus.Information = 0;
 	IoCompleteRequest(Irp,IO_NO_INCREMENT);
@@ -31,15 +31,16 @@ void DriverUnload(PDRIVER_OBJECT DriverObject)
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
 {
+	ULONG i;
 	UNREFERENCED_PARAMETER(DriverObject);
 	UNREFERENCED_PARAMETER(RegPath);
 
-	for (int i = 0;i < IRP_MJ_MAXIMUM_FUNCTION;i++)
+	for (i = 0;i < IRP_MJ_MAXIMUM_FUNCTION;i++)
 		DriverObject->MajorFunction[i] = DefaultDispatch;
 	DriverObject->DriverUnload = DriverUnload;  
 
 	InsertCallBack(COMMAND_DOSOMETHING,talk);
-	runServer();
+	runServer((TCHAR *)SERVERNAME_W);
 
 	return STATUS_SUCCESS;
 }

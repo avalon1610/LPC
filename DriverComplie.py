@@ -26,7 +26,7 @@ class InteractiveCommand:
 		self.process.stdin.write(command + "\n")
 		return self.wait_for_prompt()
 
-#########################################################
+# ########################################################
 # setup driver environment variable here
 
 # Winddk path
@@ -39,7 +39,8 @@ target_os = 'WIN7'
 
 # build path,place them in order
 build_path = ['E:\\Projects\\LPC\\LPC','E:\\Projects\\LPC\\LPCTest']
-#########################################################
+# ########################################################
+
 set_env = ['%sbin\\setenv.bat' % winddk,winddk,environment,platform,target_os,'no_oacr']
 command = ['cmd.exe','/k'] + set_env
 print command

@@ -19,15 +19,13 @@ void wait()
 #define COMMAND_DOSOMETHING LPC_COMMAND_RESERVE+0x1
 int _tmain(int argc, _TCHAR* argv[])
 {
-
-	CLPC lpcClient;
-	lpcClient.Connect(SERVERNAME_W);
+	Connect(SERVERNAME_W);
 	TCHAR msg[LARGE_MESSAGE_SIZE] = {0};
 	while(true)
 	{
 		wcin >> msg;
 		//lpcClient.SyncSend(msg);
-		lpcClient.Control(COMMAND_DOSOMETHING,SYNC,msg);
+		Control(COMMAND_DOSOMETHING,SYNC,msg);
 	}
 	wait();
 	return 0;

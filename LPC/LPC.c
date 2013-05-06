@@ -1,5 +1,37 @@
 #include "LPC.h"
 
+_CreatePort				NtCreatePort;
+_ListenPort				NtListenPort;
+_AcceptConnectPort		NtAcceptConnectPort;
+_CompleteConnectPort	NtCompleteConnectPort;
+_ReplyPort				NtReplyPort;
+_ReplyWaitReceivePort	NtReplyWaitReceivePort;
+_ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx;
+_RequestPort			NtRequestPort;
+_RequestWaitReplyPort	NtRequestWaitReplyPort;
+_ConnectPort			NtConnectPort; //exported
+#ifndef _KERNEL_MODE
+_InitUnicodeString		RtlInitUnicodeString;
+_ZwCreateSection		ZwCreateSection;
+
+MAP CallBackList; 
+BOOL InitProcAddress();
+BOOL CheckWOW64();
+#else
+KERNEL_MAP *CallBackList;
+PVOID FindCallBack(ULONG command);
+BOOL FindKernelFunction();
+#endif
+
+HANDLE hConnectPort;
+HANDLE SectionHandle;
+HANDLE hThread;
+SERVER_INFO si;
+CLIENT_INFO ci;
+LIST_ENTRY head;
+void ServerProc(SERVER_INFO *);
+BOOL KeepRunning;
+
 ULONG m_AllocTag = ' ZAR';
 BOOL Debug = FALSE;
 
@@ -9,53 +41,6 @@ BOOL doKernelInit()
 	CallBackList = NULL;
 	return FindKernelFunction();
 }
-
-/*
-#pragma LOCKEDCODE
-RTL_GENERIC_COMPARE_RESULTS
-	CompareRoutine (
-	__in struct _RTL_GENERIC_TABLE  *Table,
-	__in PVOID  FirstStruct,
-	__in PVOID  SecondStruct
-	)
-{
-	UNREFERENCED_PARAMETER(Table);
-	ULONG key1 = (ULONG)FirstStruct;
-	ULONG key2 = (ULONG)SecondStruct;
-	if (key1 > key2)
-		return GenericGreaterThan;
-	if (key1 < key2)
-		return GenericLessThan;
-	return GenericEqual;
-}
-
-#pragma LOCKEDCODE
-PVOID
-	AllocateRoutine (
-	__in struct _RTL_GENERIC_TABLE  *Table,
-	__in CLONG  ByteSize
-	)
-{
-	UNREFERENCED_PARAMETER(Table);
-	PVOID ptr;
-	if (KeGetCurrentIrql() > PASSIVE_LEVEL)
-		ptr = MALLOC(ByteSize);
-	else
-		ptr = ExAllocatePoolWithTag(NonPagedPool,ByteSize,m_AllocTag);
-	return ptr;
-}
-
-#pragma LOCKEDCODE
-VOID
-	FreeRoutine (
-	__in struct _RTL_GENERIC_TABLE  *Table,
-	__in PVOID  Buffer
-	)
-{
-	UNREFERENCED_PARAMETER(Table);
-	FREE(Buffer);
-}
-*/
 #endif
 
 BOOL Initialize(void)
@@ -66,8 +51,7 @@ BOOL Initialize(void)
 #ifndef _KERNEL_MODE
 	if (CheckWOW64())
 	{
-		bOK = false;
-		return;
+		return bOK;
 	}
 	bOK = InitProcAddress();
 #else
@@ -87,15 +71,11 @@ PVOID FindCallBack(ULONG command)
 	else
 		return k;
 }
+#endif // _KERNEL_MODE
 
 void InsertCallBack(ULONG command,PVOID callback)
 {
-	/*
-	BOOLEAN newElement = TRUE;
-	PVOID addr = RtlInsertElementGenericTable(&CallBackList,&command,sizeof(ULONG),&newElement);
-	if (addr)
-		addr = callback;
-	*/
+#ifdef _KERNEL_MODE
 	KERNEL_MAP *k;
 	if (!FindCallBack(command))
 	{
@@ -104,27 +84,32 @@ void InsertCallBack(ULONG command,PVOID callback)
 		k->callback = callback;
 		HASH_ADD_INT(CallBackList,command,k);
 	}
+#else
+	CallBackList[command] = callback;
+#endif
 }
-#endif // _KERNEL_MODE
+
 
 void runServer(TCHAR *LpcPortName)
 {
+	UNICODE_STRING usPortName;
+	OBJECT_ATTRIBUTES obj;
+	LARGE_INTEGER SectionSize = {LARGE_MESSAGE_SIZE};
+
 	if (LpcPortName == NULL)
-		LpcPortName = SERVERNAME_W;
+		LpcPortName = (TCHAR *)SERVERNAME_W;
 
 	if (!Initialize())
 	{
 		PRINT(_T("Initialize Failed!!!\n"));
 		return;
 	}
-	UNICODE_STRING usPortName;
-	OBJECT_ATTRIBUTES obj;
-	LARGE_INTEGER SectionSize = {LARGE_MESSAGE_SIZE};
-	
+
 	InitializeListHead(&head);
 	//HANDLE SectionHandle = NULL;
 	__try
 	{
+		HANDLE ThreadHandle;
 		NTSTATUS status = ZwCreateSection(&SectionHandle,
 										  SECTION_MAP_READ | SECTION_MAP_WRITE,
 										  NULL,	//backed by the pagefile
@@ -153,23 +138,24 @@ void runServer(TCHAR *LpcPortName)
 
 		si.LPCPortHandle = hConnectPort;
 		si.SectionHandle = SectionHandle;
+		KeepRunning = TRUE;
 
 #ifndef _KERNEL_MODE
-		if (!CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)&ServerProc,(LPVOID)&si,0,NULL))
+		ThreadHandle = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)&ServerProc,(LPVOID)&si,0,NULL);
+		if (ThreadHandle == NULL)
 		{
 			PRINT(_T("CreateThread ServerProc error:%d\n"),GetLastError());
-		}
+			__leave;
+		}	
 #else
-		HANDLE ThreadHandle;
 		status = PsCreateSystemThread(&ThreadHandle,0,NULL,NULL,NULL,(PKSTART_ROUTINE)&ServerProc,(PVOID)&si);
 		if (!NT_SUCCESS(status))
 		{
 			PRINT("PsCreateSystemThread Error:0x%X\n",status);
 			__leave;
 		}
-
-		ZwClose(ThreadHandle);
 #endif
+		si.ServerThreadHandle = ThreadHandle;
 		PRINT(_T("Listening to Port \"%S\",wait for connect...\n"),LpcPortName);
 	}
 	__finally
@@ -183,16 +169,18 @@ void ServerProc(SERVER_INFO *si)
 	HANDLE ConnectionHandle = si->LPCPortHandle;
 	//PORT_MESSAGE *MessageHeader = (PORT_MESSAGE *)MALLOC(sizeof(PORT_MESSAGE));
 	PTRANSFERRED_MESSAGE LPCMessage = (PTRANSFERRED_MESSAGE)MALLOC(sizeof(TRANSFERRED_MESSAGE));
-	RtlZeroMemory(LPCMessage,sizeof(TRANSFERRED_MESSAGE));
 	PORT_MESSAGE *MessageHeader = &LPCMessage->Header;
 	NTSTATUS status;
 	ULONG count = 0;
 	PORT_VIEW ServerView;
 	HANDLE DataPortHandle = NULL;
 	REMOTE_PORT_VIEW ClientView;
-	BOOL isExist = true;
+	BOOL isExist = TRUE;
 	HANDLE ClientHandle = NULL;
-	
+	CLIENT_ENTRY *ConnectedClient = NULL;
+
+	RtlZeroMemory(LPCMessage,sizeof(TRANSFERRED_MESSAGE));
+
 	//
 	// Fill local and remote memory views. When the LPC
 	// message comes to the client, the section will be remapped
@@ -205,10 +193,11 @@ void ServerProc(SERVER_INFO *si)
 	ServerView.ViewSize = LARGE_MESSAGE_SIZE;
 	si->ServerView = ServerView;
 	ClientView.Length = sizeof(REMOTE_PORT_VIEW);
-	CLIENT_ENTRY *ConnectedClient = NULL;
 
 	while (KeepRunning)
 	{
+		LIST_ENTRY *pEntry = (&head)->Flink;
+		TCHAR *buffer;
 		status = NtReplyWaitReceivePort(ConnectionHandle,(PULONG)&ClientHandle,NULL,MessageHeader);
 		
 		if (!NT_SUCCESS(status))
@@ -217,14 +206,13 @@ void ServerProc(SERVER_INFO *si)
 			break;
 		}
 
-		LIST_ENTRY *pEntry = (&head)->Flink;
-		isExist = false;
+		isExist = FALSE;
 		while (pEntry != &head)
 		{
 			CLIENT_ENTRY *info = CONTAINING_RECORD(pEntry,CLIENT_ENTRY,List);
 			if (info->ClientHandle == ClientHandle)
 			{
-				isExist = true;
+				isExist = TRUE;
 				ConnectedClient = info;
 				break;
 			}
@@ -233,6 +221,7 @@ void ServerProc(SERVER_INFO *si)
 
 		if (MessageHeader->u2.s2.Type == LPC_CONNECTION_REQUEST)
 		{
+			CLIENT_ENTRY *ce;
 			if (isExist)
 			{
 				PRINT(_T("client [%08lX] message type error!\n"),ClientHandle);
@@ -254,7 +243,7 @@ void ServerProc(SERVER_INFO *si)
 				break;
 			}
 
-			CLIENT_ENTRY *ce = (CLIENT_ENTRY *)MALLOC(sizeof(CLIENT_ENTRY));
+			ce = (CLIENT_ENTRY *)MALLOC(sizeof(CLIENT_ENTRY));
 			ce->ClientHandle = DataPortHandle;
 			ce->ClientView = ClientView;
 			InsertHeadList(&head,&ce->List);
@@ -280,12 +269,12 @@ void ServerProc(SERVER_INFO *si)
 		LPCMessage = (PTRANSFERRED_MESSAGE)MessageHeader;
 		if (IS_COMMAND_RESERVE(LPCMessage->Command))
 		{
+			TRANSFERRED_MESSAGE replayMsg;
 			switch (LPCMessage->Command)
 			{
 			case LPC_COMMAND_REQUEST_NOREPLY:
 				break;
 			case LPC_COMMAND_REQUEST_REPLY:
-				TRANSFERRED_MESSAGE replayMsg;
 				RtlCopyMemory(&replayMsg,LPCMessage,sizeof(TRANSFERRED_MESSAGE));
 				STRCOPY(replayMsg.MessageText,_T("Server Answer!"));
 				status = NtReplyPort(ClientHandle,&replayMsg.Header);
@@ -294,7 +283,7 @@ void ServerProc(SERVER_INFO *si)
 				break;
 			case LPC_COMMAND_STOP:
 				PRINT(_T("[%08lX] Shutdown the Server! We die ...\n"),ClientHandle);
-				KeepRunning = false;
+				KeepRunning = FALSE;
 				break;
 			default:
 				break;
@@ -338,9 +327,9 @@ void ServerProc(SERVER_INFO *si)
 					PRINT(_T("call callback function failed %d\n"),status);
 				if (!IS_COMMAND_ASYNC(LPCMessage->Command))
 				{
+					TRANSFERRED_MESSAGE replayMsg;
 					ZwWaitForSingleObject(tHandle,FALSE,NULL);
 
-					TRANSFERRED_MESSAGE replayMsg;
 					RtlCopyMemory(&replayMsg,LPCMessage,sizeof(TRANSFERRED_MESSAGE));
 					STRCOPY(replayMsg.MessageText,_T("Server Answer!"));
 					status = NtReplyPort(ClientHandle,&replayMsg.Header);
@@ -356,7 +345,7 @@ void ServerProc(SERVER_INFO *si)
 #endif	
 		}
 		
-		TCHAR *buffer = (TCHAR *)MALLOC(sizeof(TCHAR)*LARGE_MESSAGE_SIZE);
+		buffer = (TCHAR *)MALLOC(sizeof(TCHAR)*LARGE_MESSAGE_SIZE);
 		if (LPCMessage->UseSection)
 		{
 			PRINT(_T("[Received Large Data]\n"));
@@ -376,36 +365,65 @@ void ServerProc(SERVER_INFO *si)
 	} //end of while
 
 	FREE(LPCMessage);
-	NtClose(ConnectionHandle);
 
 #ifdef _KERNEL_MODE
+	NtClose(ConnectionHandle);
 	PsTerminateSystemThread(STATUS_SUCCESS);
+#else
+	CloseHandle(ConnectionHandle);
 #endif
+	
 }
 
 void StopServer()
 {
-	KeepRunning = false;
+	// this is for server clsoe itself
+	TRANSFERRED_MESSAGE Message;
+	PORT_MESSAGE ShutdownMsg;
+	NTSTATUS status;
+	ULONG MessageLength = sizeof(PORT_MESSAGE);
+
+	RtlZeroMemory(&ShutdownMsg,MessageLength);
+	InitializeMessageHeader(&ShutdownMsg,MessageLength,LPC_PORT_CLOSED);
+	
+	status = NtRequestPort(si.ServerThreadHandle, &ShutdownMsg);
+	if (!NT_SUCCESS(status))
+	{
+		PRINT(_T("NtRequestPort error 0x%08lX\n"), status);
+	}
+	
+	KeepRunning = FALSE;
+#ifdef _KERNEL_MODE
+	status = ZwWaitForSingleObject(si.ServerThreadHandle,FALSE,NULL);
+	if (!NT_SUCCESS(status))
+		PRINT("ZwWaitForSingleObject Error:%X",status);
+	ZwClose(si.ServerThreadHandle);
+#else
+	WaitForSingleObject(si.ServerThreadHandle,INFINITE);
+	CloseHandle(si.ServerThreadHandle);
+#endif // _KERNEL_MODE
 }
 
 BOOL Connect(TCHAR *LpcPortName)
 {
-	BOOL success = false;
-	if (!bOK)
-	{
-		PRINT(_T("Initialize Failed!!!\n"));
-		return success;
-	}
+	BOOL success = FALSE;
 	UNICODE_STRING usPortName;
-	RtlInitUnicodeString(&usPortName,(PCWSTR)LpcPortName);
 
 	SECURITY_QUALITY_OF_SERVICE SecurityQos;
 	REMOTE_PORT_VIEW ServerView;
 	LARGE_INTEGER SectionSize = {LARGE_MESSAGE_SIZE};
 	PORT_VIEW ClientView;
-	
-	_try
+	if (!Initialize())
 	{
+		PRINT(_T("Initialize Failed!!!\n"));
+		return success;
+	}
+	
+	RtlInitUnicodeString(&usPortName,(PCWSTR)LpcPortName);
+
+	__try
+	{
+		HANDLE PortHandle = NULL;
 		NTSTATUS status = ZwCreateSection(&SectionHandle,
 										  SECTION_MAP_READ | SECTION_MAP_WRITE,
 										  NULL,
@@ -443,8 +461,7 @@ BOOL Connect(TCHAR *LpcPortName)
 		//
 		// Connect to the port
 		//
-		HANDLE PortHandle = NULL;
-
+		
 		PRINT(_T("Connecting to port \"%s\" (NtConnectPort)...\n"),LpcPortName);
 		status = NtConnectPort(&PortHandle,
 							   &usPortName,
@@ -466,7 +483,7 @@ BOOL Connect(TCHAR *LpcPortName)
 		ci.ServerView = ServerView;
 		ci.ServerHandle = PortHandle;
 		
-		success = true;
+		success = TRUE;
 	}
 	__finally
 	{
@@ -490,17 +507,18 @@ BOOL SyncSend(TCHAR *msg)
 BOOL Send(TCHAR *msg,ULONG command)
 {
 	TRANSFERRED_MESSAGE Message;
+	NTSTATUS status;
 	ULONG MessageLength = sizeof(TRANSFERRED_MESSAGE);
-	RtlZeroMemory(&Message,MessageLength);
-
 	SIZE_T dataSize = (STRLEN(msg)+1)*sizeof(TCHAR);
+
+	RtlZeroMemory(&Message,MessageLength);
 	InitializeMessageHeader(&Message.Header,MessageLength,LPC_NEW_MESSAGE);
 	Message.Command = command;
-	NTSTATUS status;
+	
 	if (dataSize > MAX_MESSAGE_SIZE)
 	{
 		if (dataSize > LARGE_MESSAGE_SIZE)
-			return false;
+			return FALSE;
 		//write to section
 		Message.UseSection = TRUE;
 		STRCOPY(Message.MessageText,_T("Real Message is in the Section!"));
@@ -537,6 +555,7 @@ BOOL Send(TCHAR *msg,ULONG command)
 		// Send the data request, and wait for reply
 		//
 		TRANSFERRED_MESSAGE ReplyMessage;
+		TCHAR *buffer;
 		RtlZeroMemory(&ReplyMessage,MessageLength);
 		status = NtRequestWaitReplyPort(ci.ServerHandle, &Message.Header,&ReplyMessage.Header);
 
@@ -546,45 +565,30 @@ BOOL Send(TCHAR *msg,ULONG command)
 		}
 		else
 		{
+			buffer = (TCHAR *)MALLOC(sizeof(TCHAR)*LARGE_MESSAGE_SIZE);
 			if (ReplyMessage.UseSection)
 			{
 				PRINT(_T("[Received Large Data]\n"));
-				TCHAR buffer[LARGE_MESSAGE_SIZE] = {0};
+				//TCHAR buffer[LARGE_MESSAGE_SIZE] = {0};
 				RtlCopyMemory(buffer,ci.ServerView.ViewBase,ci.ServerView.ViewSize);
 				PRINT(_T("[%08lX]:%ws\n"),ci.ServerHandle,buffer);
 			}
 			else
 			{
-				TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
+				//TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
 				//wcscpy_s(buffer,ReplyMessage.MessageText);
 				RtlCopyMemory(buffer,ReplyMessage.MessageText,sizeof(ReplyMessage.MessageText));
 				PRINT(_T("[%08lX]:%ws\n"),ci.ServerHandle,buffer);
 			}
+
+			FREE(buffer);
 		}
 	} 
 
 	return NT_SUCCESS(status);
 }
 
-_ConnectPort NtConnectPort = NULL;
-_CreatePort NtCreatePort = NULL;
-_ListenPort	NtListenPort = NULL;
-_AcceptConnectPort NtAcceptConnectPort = NULL;
-_CompleteConnectPort NtCompleteConnectPort = NULL;
-_ReplyPort NtReplyPort = NULL;
-_ReplyWaitReceivePort NtReplyWaitReceivePort = NULL;
-_ReplyWaitReceivePortEx	NtReplyWaitReceivePortEx = NULL;
-_RequestPort NtRequestPort = NULL;
-_RequestWaitReplyPort NtRequestWaitReplyPort = NULL;
-LIST_ENTRY head;
-KERNEL_MAP *CallBackList;
-BOOL KeepRunning = true;
-
 #ifndef _KERNEL_MODE
-MAP CallBackList;
-_InitUnicodeString RtlInitUnicodeString = NULL;
-_ConnectPort NtConnectPort = NULL;
-_ZwCreateSection ZwCreateSection = NULL;
 BOOL InitProcAddress()
 {
 	HMODULE hModule = GetModuleHandle(L"ntdll.dll");
@@ -605,10 +609,10 @@ BOOL InitProcAddress()
 
 		if (NtCreatePort && NtListenPort && NtAcceptConnectPort && NtCompleteConnectPort && NtReplyPort && NtRequestWaitReplyPort &&
 			NtReplyWaitReceivePort && NtReplyWaitReceivePortEx && RtlInitUnicodeString && NtConnectPort && ZwCreateSection && NtRequestPort)
-			return true;
+			return TRUE;
 	}
 
-	return false;
+	return FALSE;
 }
 
 BOOL CheckWOW64()
@@ -618,12 +622,12 @@ BOOL CheckWOW64()
 	{
 		if (isUnderWOW64)
 		{
-			PRINT(_T("WARNING: You are running 32-bit version of the example under 64-bit Windows.\n")
+			PRINT(_T("WARNING: You are running 32-bit version of the application under 64-bit Windows.\n")
 				_T("This is not supported and will not work.\n"));
-			return true;
+			return TRUE;
 		}
 	}
-	return false;
+	return FALSE;
 };
 #else
 ULONG GetSystemRoutineAddress(int,PVOID);
@@ -644,9 +648,9 @@ BOOL FindKernelFunction()
 
 	if (NtCreatePort && NtListenPort && NtAcceptConnectPort && NtCompleteConnectPort && NtReplyPort && NtRequestWaitReplyPort &&
 		NtReplyWaitReceivePort && NtReplyWaitReceivePortEx && NtRequestPort && NtRequestWaitReplyPort && NtConnectPort)
-		return true;
+		return TRUE;
 
-	return false;
+	return FALSE;
 }
 #endif
 
