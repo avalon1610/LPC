@@ -257,6 +257,6 @@ BOOL Connect(TCHAR *ServerName);
 BOOL AsyncSend(TCHAR *msg);
 BOOL SyncSend(TCHAR *msg);
 BOOL Send(TCHAR *msg,ULONG command);
-void StopServer();
+void StopServer(TCHAR *);
 
 #pragma pack(pop)

@@ -393,7 +393,11 @@ void StopServer(TCHAR *ServerName)
 	RtlZeroMemory(&Message,MessageLength);
 	InitializeMessageHeader(&Message.Header,MessageLength,LPC_PORT_CLOSED);
 	
-	status = NtRequestWaitReplyPort(si.LPCPortHandle,&Message.Header,&ReplyMessage);
+	status = NtConnectPort(&si.LPCPortHandle,
+						   &usServerName,
+						   &SecurityQos,
+						   NULL,NULL,
+						   NULL,&Message.Header,&MessageLength);
 	if (!NT_SUCCESS(status))
 	{
 		PRINT(_T("NtConnectPort error 0x%08lX\n"), status);
