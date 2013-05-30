@@ -447,4 +447,171 @@ DWORD GetFunctionAddressBySSDT(DWORD index,WCHAR *zwFunctionName)
 	}
 	return NULL;
 }
+
+WIN_VER_DETAIL GetWindowsVersion()
+{
+	RTL_OSVERSIONINFOEXW osverinfo;
+	if (WinVersion)
+		return WinVersion;
+
+	RtlZeroMemory(&osverinfo,sizeof(RTL_OSVERSIONINFOEXW));
+	osverinfo.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOEXW);
+	if (RtlGetVersion((RTL_OSVERSIONINFOEXW *)&osverinfo) != STATUS_SUCCESS)
+		return WINDOWS_VERSION_NONE;
+
+	if (osverinfo.dwMajorVersion == 5 && osverinfo.dwMinorVersion == 0)
+		WinVersion = WINDOWS_VERSION_2K;
+	else if (osverinfo.dwMajorVersion == 5 && osverinfo.dwMinorVersion == 1)
+		WinVersion = WINDOWS_VERSION_XP;
+	else if (osverinfo.dwMajorVersion == 5 && osverinfo.dwMinorVersion == 2)
+	{
+		if (osverinfo.wServicePackMajor == 0)
+			WinVersion = WINDOWS_VERSION_2K3;
+		else
+			WinVersion = WINDOWS_VERSION_2K3_SP1_SP2;
+	}
+	else if (osverinfo.dwMajorVersion == 6 && osverinfo.dwMinorVersion == 0)
+		WinVersion = WINDOWS_VERSION_VISTA_2008;
+	else if (osverinfo.dwMajorVersion == 6 && osverinfo.dwMinorVersion == 1 && osverinfo.dwBuildNumber == 7000)
+		WinVersion = WINDOWS_VERSION_7_7000;
+	else if (osverinfo.dwMajorVersion == 6 && osverinfo.dwMinorVersion == 1 && osverinfo.dwBuildNumber >= 7600)
+		WinVersion = WINDOWS_VERSION_7_7600_UP;
+
+	return WinVersion;
+}
+
+PVOID Search_PspTerminateThreadByPointer(BOOL SysVersionCheck)
+{
+	PUCHAR cPtr;
+	BOOL bRetOK = FALSE;
+	ULONG addret;
+	ULONG ulReloadAddress;
+
+	__try
+	{
+		for (cPtr = (PUCHAR)PsTerminateSystemThread;cPtr < (PUCHAR)PsTerminateSystemThread+PAGE_SIZE;cPtr++)
+		{
+			if (SysVersionCheck == WINDOWS_VERSION_XP ||
+				SysVersionCheck == WINDOWS_VERSION_VISTA_2008 ||
+				SysVersionCheck == WINDOWS_VERSION_2K3_SP1_SP2 ||
+				SysVersionCheck == WINDOWS_VERSION_7_7000 ||
+				SysVersionCheck == WINDOWS_VERSION_7_7600_UP)
+			{
+				if (*cPtr == 0xE8 && *(PUSHORT)(cPtr + 5) == 0xC25D)
+				{
+					addret = (*(PULONG)(cPtr + 1) + (ULONG)cPtr + 5);
+					ulReloadAddress = addret;
+					bRetOK = TRUE;
+					break;
+				}
+			}
+			else if (SysVersionCheck == WINDOWS_VERSION_2K3)
+			{
+				if (*cPtr == 0xE8 && *(PUSHORT)(cPtr + 5) == 0x04C2)
+				{
+					addret = (*(PULONG)(cPtr + 1) + (ULONG)cPtr + 5);
+					ulReloadAddress = addret;
+					bRetOK = TRUE;
+					break;
+				}
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		KdPrint(("Search_PspTerminateThreadByPointer Error\r\n"));
+	}
+	if (bRetOK == TRUE)
+		return ulReloadAddress;
+	return bRetOK;
+}
+
+BOOL InitKill()
+{
+	WIN_VER_DETAIL WinVer;
+	BOOL bRetOK = FALSE;
+
+	WinVer = GetWindowsVersion();
+	if (WinVer == WINDOWS_VERSION_XP)
+	{
+		ThreadProc = 0x22C;
+		ThreadListHead = 0x190;
+		UniqueProcessIdOffset = 0x084;
+		ActiveProcessLinksOffset = 0x088;
+		PspTerminateThreadByPointer_XP = Search_PspTerminateThreadByPointer(WinVer);
+		if (PspTerminateThreadByPointer_XP != FALSE)
+			bRetOK = TRUE;
+	}
+	else if (WinVer == WINDOWS_VERSION_2K3 ||
+			WinVer == WINDOWS_VERSION_2K3_SP1_SP2 ||
+			WinVer == WINDOWS_VERSION_VISTA_2008 ||
+			WinVer == WINDOWS_VERSION_7_7000 ||
+			WinVer == WINDOWS_VERSION_7_7600_UP)
+	{
+		PspTerminateThreadByPointer_K = Search_PspTerminateThreadByPointer(WinVer);
+		if (PspTerminateThreadByPointer_K != FALSE)
+		{
+			bRetOK = TRUE;
+			if (WinVer == WINDOWS_VERSION_2K3)
+			{
+				ThreadProc = 0x234;
+				ThreadListHead = 0x170;
+				UniqueProcessIdOffset = 0x084;
+				ActiveProcessLinksOffset = 0x088;
+			}
+			else if (WinVer == WINDOWS_VERSION_2K3_SP1_SP2)
+			{
+				ThreadProc = 0x224;
+				ThreadListHead = 0x180;
+				UniqueProcessIdOffset = 0x094;
+				ActiveProcessLinksOffset = 0x098;
+			}
+			else if (WinVer == WINDOWS_VERSION_VISTA_2008)
+			{
+				ThreadProc = 0x248;
+				ThreadListHead = 0x168;
+				UniqueProcessIdOffset = 0x09c;
+				ActiveProcessLinksOffset = 0x0a0;
+			}
+			else if (WinVer == WINDOWS_VERSION_7_7000 || WinVer == WINDOWS_VERSION_7_7600_UP)
+			{
+				ThreadProc = 0x268;
+				ThreadListHead = 0x188;
+				if (WinVer == WINDOWS_VERSION_7_7000)
+					ThreadListHead = 0x180;
+				UniqueProcessIdOffset = 0x0b4;
+				ActiveProcessLinksOffset = 0x0b8;
+			}
+		}
+	}
+	else 
+	{
+		bRetOK = FALSE;
+	}
+
+	return bRetOK;
+}
+
+NTSTATUS TerminateThread(IN ULONG Thread,BOOL SysVersionCheck)
+{
+	NTSTATUS Status;
+	if (SysVersionCheck == WINDOWS_VERSION_XP)
+	{
+		Status = (*PspTerminateThreadByPointer_XP)(Thread,0);  //XP下
+	}
+	else if (SysVersionCheck == WINDOWS_VERSION_2K3 || SysVersionCheck == WINDOWS_VERSION_2K3_SP1_SP2)
+	{
+		Status = (*PspTerminateThreadByPointer_K)(Thread,0,FALSE);  //2003下
+	}
+	else if (SysVersionCheck == WINDOWS_VERSION_VISTA_2008 ||
+			 SysVersionCheck == WINDOWS_VERSION_7_7000 || 
+			 SysVersionCheck == WINDOWS_VERSION_7_7600_UP)
+	{
+		Status = (*PspTerminateThreadByPointer_K)(Thread,0,TRUE);  //vista下，煮一个参数为　ＴＲＵＥ
+	}
+
+	if (!NT_SUCCESS(Status))
+		KdPrint(("Terminate Thread Failed:%X\n",Status));
+	return Status;
+}
 #endif

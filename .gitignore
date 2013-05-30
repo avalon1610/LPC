@@ -32,4 +32,6 @@
 *.err
 *.wrn
 *.dll
+*.opensdf
+
 

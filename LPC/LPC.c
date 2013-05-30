@@ -156,7 +156,7 @@ void runServer(TCHAR *LpcPortName)
 		}
 #endif
 		si.ServerThreadHandle = ThreadHandle;
-		PRINT(_T("Listening to Port \"%S\",wait for connect...\n"),LpcPortName);
+		PRINT(_T("Listening to Port \"%ws\",wait for connect...\n"),LpcPortName);
 	}
 	__finally
 	{
@@ -375,46 +375,37 @@ void ServerProc(SERVER_INFO *si)
 	
 }
 
+#ifdef _KERNEL_MODE
+BOOL InitKill();
+NTSTATUS TerminateThread(ULONG,BOOL);
+WIN_VER_DETAIL GetWindowsVersion();
+
 void StopServer(TCHAR *ServerName)
 {
-	// this is for server clsoe itself
-	TRANSFERRED_MESSAGE Message;
-	PORT_MESSAGE ReplyMessage;
 	NTSTATUS status;
-	ULONG MessageLength = sizeof(TRANSFERRED_MESSAGE);
-	HANDLE PortHandle;
-	UNICODE_STRING usServerName;
-	SECURITY_QUALITY_OF_SERVICE SecurityQos;
-	RtlZeroMemory(&SecurityQos,sizeof(SECURITY_QUALITY_OF_SERVICE));
-	SecurityQos.Length = sizeof(SECURITY_QUALITY_OF_SERVICE);
+	PETHREAD Thread;
+	WIN_VER_DETAIL WinVer;
 
-	RtlInitUnicodeString(&usServerName,(PCWSTR)ServerName);
-
-	RtlZeroMemory(&Message,MessageLength);
-	InitializeMessageHeader(&Message.Header,MessageLength,LPC_PORT_CLOSED);
-	
-	status = NtConnectPort(&si.LPCPortHandle,
-						   &usServerName,
-						   &SecurityQos,
-						   NULL,NULL,
-						   NULL,&Message.Header,&MessageLength);
+	WinVer = GetWindowsVersion();
+	KeepRunning = FALSE;
+	status = ObReferenceObjectByHandle(si.ServerThreadHandle,THREAD_ALL_ACCESS,*PsThreadType,KernelMode,&Thread,NULL);
 	if (!NT_SUCCESS(status))
 	{
-		PRINT(_T("NtConnectPort error 0x%08lX\n"), status);
+		PRINT("ObReferenceObjectByHandle Error:%X\n",status);
 		return;
 	}
-	
-	KeepRunning = FALSE;
-#ifdef _KERNEL_MODE
-	status = ZwWaitForSingleObject(si.ServerThreadHandle,FALSE,NULL);
-	if (!NT_SUCCESS(status))
-		PRINT("ZwWaitForSingleObject Error:%X",status);
-	ZwClose(si.ServerThreadHandle);
-#else
-	WaitForSingleObject(si.ServerThreadHandle,INFINITE);
-	CloseHandle(si.ServerThreadHandle);
-#endif // _KERNEL_MODE
+	if (InitKill())
+	{
+		status = TerminateThread(Thread,WinVer);
+		if (!NT_SUCCESS(status))
+			return;
+		status = ZwWaitForSingleObject(si.ServerThreadHandle,FALSE,NULL);
+		if (!NT_SUCCESS(status))
+			PRINT("ZwWaitForSingleObject Error:%X\n",status);
+		ZwClose(si.ServerThreadHandle);
+	}
 }
+#endif // _KERNEL_MODE
 
 BOOL Connect(TCHAR *LpcPortName)
 {
