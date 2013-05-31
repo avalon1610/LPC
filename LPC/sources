@@ -10,5 +10,7 @@ MSC_WARNING_LEVEL=/W3
 !endif
 
 SOURCES=LPC.c \
-		Kernel.c
+		Kernel.c \
+		ldasm.c
+		
 		

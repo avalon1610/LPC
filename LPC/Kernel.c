@@ -1,5 +1,6 @@
 #ifdef _KERNEL_MODE
 #include "KernelModeDefs.h"
+#include "ldasm.h"
 
 extern BOOL Debug;
 
@@ -613,5 +614,76 @@ NTSTATUS TerminateThread(IN ULONG Thread,BOOL SysVersionCheck)
 	if (!NT_SUCCESS(Status))
 		KdPrint(("Terminate Thread Failed:%X\n",Status));
 	return Status;
+}
+
+ULONG GetThreadFlagsOffset()
+{
+	UCHAR *cPtr,*pOpcode;
+	ULONG Length;
+	USHORT Offset;
+
+	for (cPtr = (PUCHAR)PsTerminateSystemThread;cPtr < (PUCHAR)PsTerminateSystemThread + 0x100; cPtr += Length)
+	{
+		Length = SizeOfCode(cPtr,&pOpcode);
+		if (!Length) break;
+		if (*(USHORT *)pOpcode == 0x80F6) // test byte ptr [eax+248h],10h
+		{
+			Offset = *(USHORT *)(ULONG)(pOpcode + 2);
+			return Offset;
+		}
+	}
+
+	return 0;
+}
+
+VOID KernelTerminateThreadRoutine(PKAPC Apc,
+								  PKNORMAL_ROUTINE *NormalRoutine,
+								  PVOID *NormalContext,
+								  PVOID *SystemArgument1,
+								  PVOID *SystemArgument2)
+{
+	PULONG ThreadFlags;
+	ULONG CrossThreadFlagsOffset = GetThreadFlagsOffset();
+	ExFreePool(Apc);
+
+	if (CrossThreadFlagsOffset)
+	{
+		ThreadFlags = (ULONG *)((ULONG)(PsGetCurrentThread()) + CrossThreadFlagsOffset);
+		*ThreadFlags = (*ThreadFlags) | PS_CROSS_THREAD_FLAGS_SYSTEM;
+
+		PsTerminateSystemThread(STATUS_SUCCESS);
+	}
+	else
+	{
+		KdPrint(("GetThreadFlagsOffset Failed.\n"));
+	}
+
+	return; //never be here
+}
+
+BOOL KillThread(PETHREAD Thread)
+{
+	PKAPC Apc = NULL;
+	BOOL blnSucceed = FALSE;
+	//BOOL bInit = FALSE;
+
+	//if (!MmIsAddressValidEx(Thread))
+	//	return FALSE;
+
+	Apc = ExAllocatePool(NonPagedPool,sizeof(KAPC));
+	if (!Apc)
+		return blnSucceed;
+
+
+	KeInitializeApc(Apc,
+					Thread,
+					OriginalApcEnvironment,
+					KernelTerminateThreadRoutine,
+					NULL,
+					NULL,
+					KernelMode,
+					NULL);
+	blnSucceed = KeInsertQueueApc(Apc,NULL,NULL,0);
+	return blnSucceed;
 }
 #endif

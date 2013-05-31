@@ -30,6 +30,34 @@ PSPTERMINATETHREADBYPOINTER_XP PspTerminateThreadByPointer_XP;
 
 ULONG ThreadProc,ThreadListHead,ActiveProcessLinksOffset,UniqueProcessIdOffset,processpid;
 
+typedef enum _KAPC_ENVIRONMENT
+{
+	OriginalApcEnvironment,
+	AttachedApcEnvironment,
+	CurrentApcEnvironment,
+	InsertApcEnvironment
+} KAPC_ENVIRONMENT;
+
+NTKERNELAPI
+VOID
+KeInitializeApc(PKAPC Apc,
+				PETHREAD Thread,
+				KAPC_ENVIRONMENT Environment,
+				PKKERNEL_ROUTINE KernelRoutine,
+				PKRUNDOWN_ROUTINE RundownRoutine,
+				PKNORMAL_ROUTINE NormalRoutine,
+				KPROCESSOR_MODE ProcessorMode,
+				PVOID NormelContext);
+
+NTKERNELAPI
+BOOLEAN
+KeInsertQueueApc(PKAPC Apc,
+				 PVOID SystemArgument1,
+				 PVOID SystemArgument2,
+				 KPRIORITY Increment);
+
+#define PS_CROSS_THREAD_FLAGS_SYSTEM 0x00000010UL
+
 #pragma pack(push,1)
 typedef enum VALIDITY_CHECK_STATUS
 {

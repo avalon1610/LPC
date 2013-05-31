@@ -257,12 +257,12 @@ void ServerProc(SERVER_INFO *si)
 			PRINT(_T("client [%08lX] die...\n"),ClientHandle);
 			continue;
 		}
-
 		
 		//normal message handle
 		if (!isExist)
 		{
-			PRINT(_T("client [%08lX] not found,you should connect first..\n"),ClientHandle);
+			//PRINT(_T("client [%08lX] not found,you should connect first..\n"),ClientHandle);
+			PRINT(_T("Maybe Server Shutdown Request..\n"));
 			continue;
 		}
 		
@@ -376,17 +376,13 @@ void ServerProc(SERVER_INFO *si)
 }
 
 #ifdef _KERNEL_MODE
-BOOL InitKill();
-NTSTATUS TerminateThread(ULONG,BOOL);
-WIN_VER_DETAIL GetWindowsVersion();
+BOOL KillThread(PETHREAD Thread);
 
 void StopServer(TCHAR *ServerName)
 {
-	NTSTATUS status;
+	/*NTSTATUS status;
 	PETHREAD Thread;
-	WIN_VER_DETAIL WinVer;
 
-	WinVer = GetWindowsVersion();
 	KeepRunning = FALSE;
 	status = ObReferenceObjectByHandle(si.ServerThreadHandle,THREAD_ALL_ACCESS,*PsThreadType,KernelMode,&Thread,NULL);
 	if (!NT_SUCCESS(status))
@@ -394,16 +390,23 @@ void StopServer(TCHAR *ServerName)
 		PRINT("ObReferenceObjectByHandle Error:%X\n",status);
 		return;
 	}
-	if (InitKill())
-	{
-		status = TerminateThread(Thread,WinVer);
-		if (!NT_SUCCESS(status))
-			return;
-		status = ZwWaitForSingleObject(si.ServerThreadHandle,FALSE,NULL);
-		if (!NT_SUCCESS(status))
-			PRINT("ZwWaitForSingleObject Error:%X\n",status);
-		ZwClose(si.ServerThreadHandle);
-	}
+	
+	if (!KillThread(Thread))
+		return;
+	*/
+	NTSTATUS status;
+	PORT_MESSAGE Request;
+	PORT_MESSAGE IncomingReply;
+	KeepRunning = FALSE;
+	InitializeMessageHeader(&Request,sizeof(PORT_MESSAGE),LPC_NEW_MESSAGE);
+	status = NtRequestWaitReplyPort(si.LPCPortHandle,&Request,&IncomingReply);
+	if (!NT_SUCCESS(status) && status != STATUS_LPC_REPLY_LOST)
+		return;
+	status = ZwWaitForSingleObject(si.ServerThreadHandle,FALSE,NULL);
+	if (!NT_SUCCESS(status))
+		PRINT("ZwWaitForSingleObject Error:%X\n",status);
+	ZwClose(si.ServerThreadHandle);
+	
 }
 #endif // _KERNEL_MODE
 
