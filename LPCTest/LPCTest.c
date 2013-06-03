@@ -18,7 +18,7 @@ void talk(PVOID param)
 {
 	TCHAR *msg;
 	msg = (TCHAR *)param;
-	KdPrint((msg));
+	KdPrint(("callback message:%s",msg));
 }
 
 
@@ -39,8 +39,8 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,IN PUNICODE_STRING RegPath)
 		DriverObject->MajorFunction[i] = DefaultDispatch;
 	DriverObject->DriverUnload = DriverUnload;  
 
-	InsertCallBack(COMMAND_DOSOMETHING,talk);
 	runServer((TCHAR *)SERVERNAME_W);
+	InsertCallBack(COMMAND_DOSOMETHING,talk);
 
 	return STATUS_SUCCESS;
 }

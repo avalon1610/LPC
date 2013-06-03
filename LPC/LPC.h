@@ -201,6 +201,18 @@ typedef NTSTATUS (NTAPI *_ZwCreateSection)(
 	_In_opt_ HANDLE FileHandle
 	);
 
+//http://troydhanson.github.io/uthash/userguide.html
+#ifdef _KERNEL_MODE
+typedef struct _KERNEL_MAP
+{
+	int command;		// key
+	PVOID callback;		
+	UT_hash_handle hh;	// make this structure hashable
+} KERNEL_MAP,*PKERNEL_MAP;
+#else
+void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
+#endif
+
 typedef struct _CLIENT_ENTRY
 {
 	LIST_ENTRY List;
@@ -214,6 +226,9 @@ typedef struct _SERVER_INFO
 	HANDLE SectionHandle;
 	HANDLE ServerThreadHandle;	// Server thread handle
 	PORT_VIEW ServerView;
+//#ifdef _KERNEL_MODE
+//	KERNEL_MAP *CallBackList;
+//#endif
 }SERVER_INFO,*PSERVER_INFO;
 
 typedef struct _CLIENT_INFO
@@ -229,7 +244,6 @@ typedef struct _CLIENT_INFO
 #define DATA_TRANSFER_PROCESSS 3
 
 
-
 #ifndef _KERNEL_MODE
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
 #define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
@@ -239,17 +253,6 @@ extern ULONG m_AllocTag;
 #define FREE(x)	ExFreePoolWithTag(x,m_AllocTag)
 #endif
 
-//http://troydhanson.github.io/uthash/userguide.html
-#ifdef _KERNEL_MODE
-typedef struct _KERNEL_MAP
-{
-	int command;		// key
-	PVOID callback;		
-	UT_hash_handle hh;	// make this structure hashable
-} KERNEL_MAP,*PKERNEL_MAP;
-#else
-void Control( ULONG COMMAND,ULONG method, TCHAR *msg );
-#endif
 
 void InsertCallBack(ULONG command,PVOID callback);
 void runServer(TCHAR *ServerName);

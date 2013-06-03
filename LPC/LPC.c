@@ -38,7 +38,7 @@ BOOL Debug = FALSE;
 #ifdef _KERNEL_MODE
 BOOL doKernelInit()
 {
-	CallBackList = NULL;
+	CallBackList = NULL;//MALLOC(sizeof(CallBackList));
 	return FindKernelFunction();
 }
 #endif
