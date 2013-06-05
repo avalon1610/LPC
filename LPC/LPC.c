@@ -69,7 +69,7 @@ PVOID FindCallBack(ULONG command)
 	if (k == NULL)
 		return NULL;
 	else
-		return k;
+		return k->callback;
 }
 #endif // _KERNEL_MODE
 
@@ -261,7 +261,6 @@ void ServerProc(SERVER_INFO *si)
 		//normal message handle
 		if (!isExist)
 		{
-			//PRINT(_T("client [%08lX] not found,you should connect first..\n"),ClientHandle);
 			PRINT(_T("Maybe Server Shutdown Request..\n"));
 			continue;
 		}
@@ -317,7 +316,6 @@ void ServerProc(SERVER_INFO *si)
 #else
 			// to do ..
 			ULONG command = GET_COMMAND(LPCMessage->Command);
-			//PVOID callback = RtlLookupElementGenericTable(&CallBackList,(PVOID)&command);
 			PVOID callback = FindCallBack(command);
 			if (callback)
 			{
@@ -349,14 +347,11 @@ void ServerProc(SERVER_INFO *si)
 		if (LPCMessage->UseSection)
 		{
 			PRINT(_T("[Received Large Data]\n"));
-			//TCHAR buffer[LARGE_MESSAGE_SIZE] = {0};
 			RtlCopyMemory(buffer,ConnectedClient->ClientView.ViewBase,ConnectedClient->ClientView.ViewSize);
 			PRINT(_T("[%08lX]:%ws\n"),ClientHandle,buffer);
 		}
 		else
 		{
-			//TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
-			//wcscpy_s(buffer,LPCMessage->MessageText);
 			RtlCopyMemory(buffer,LPCMessage->MessageText,MAX_MESSAGE_SIZE);
 			PRINT(_T("[%08lX]:%ws\n"),ClientHandle,buffer);
 		}
@@ -575,14 +570,11 @@ BOOL Send(TCHAR *msg,ULONG command)
 			if (ReplyMessage.UseSection)
 			{
 				PRINT(_T("[Received Large Data]\n"));
-				//TCHAR buffer[LARGE_MESSAGE_SIZE] = {0};
 				RtlCopyMemory(buffer,ci.ServerView.ViewBase,ci.ServerView.ViewSize);
 				PRINT(_T("[%08lX]:%ws\n"),ci.ServerHandle,buffer);
 			}
 			else
 			{
-				//TCHAR buffer[MAX_MESSAGE_SIZE] = {0};
-				//wcscpy_s(buffer,ReplyMessage.MessageText);
 				RtlCopyMemory(buffer,ReplyMessage.MessageText,sizeof(ReplyMessage.MessageText));
 				PRINT(_T("[%08lX]:%ws\n"),ci.ServerHandle,buffer);
 			}

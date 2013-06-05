@@ -18,7 +18,8 @@ void talk(PVOID param)
 {
 	TCHAR *msg;
 	msg = (TCHAR *)param;
-	KdPrint(("callback message:%s",msg));
+	KdPrint(("callback message:%ws\n",msg));
+	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 
