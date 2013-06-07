@@ -228,7 +228,8 @@ void ServerProc(SERVER_INFO *si)
 				continue;
 			}
 			
-			status = NtAcceptConnectPort(&DataPortHandle,NULL,MessageHeader,TRUE,&ServerView,&ClientView);
+			//status = NtAcceptConnectPort(&DataPortHandle,NULL,MessageHeader,TRUE,&ServerView,&ClientView);
+			status = NtAcceptConnectPort(&DataPortHandle,NULL,MessageHeader,TRUE,NULL,&ClientView); // win 7
 		
 			if (!NT_SUCCESS(status))
 			{
@@ -307,7 +308,7 @@ void ServerProc(SERVER_INFO *si)
 
 					TRANSFERRED_MESSAGE replayMsg;
 					RtlCopyMemory(&replayMsg,LPCMessage,sizeof(TRANSFERRED_MESSAGE));
-					STRCOPY(replayMsg.MessageText,_T("Server Answer!"));
+					STRCOPY(replayMsg.MessageText,L"Server Answer!");
 					status = NtReplyPort(ClientHandle,&replayMsg.Header);
 					if (!NT_SUCCESS(status))
 						PRINT(_T("Reply Error: 0x%08lX\n"),status);
@@ -329,7 +330,7 @@ void ServerProc(SERVER_INFO *si)
 					ZwWaitForSingleObject(tHandle,FALSE,NULL);
 
 					RtlCopyMemory(&replayMsg,LPCMessage,sizeof(TRANSFERRED_MESSAGE));
-					STRCOPY(replayMsg.MessageText,_T("Server Answer!"));
+					STRCOPY(replayMsg.MessageText,L"Server Answer!");
 					status = NtReplyPort(ClientHandle,&replayMsg.Header);
 					if (!NT_SUCCESS(status))
 						PRINT(_T("Reply Error: 0x%08lX\n"),status);
@@ -558,6 +559,7 @@ BOOL Send(TCHAR *msg,ULONG command)
 		TRANSFERRED_MESSAGE ReplyMessage;
 		TCHAR *buffer;
 		RtlZeroMemory(&ReplyMessage,MessageLength);
+		InitializeMessageHeader(&ReplyMessage.Header,MessageLength,LPC_REPLY);
 		status = NtRequestWaitReplyPort(ci.ServerHandle, &Message.Header,&ReplyMessage.Header);
 
 		if (!NT_SUCCESS(status))

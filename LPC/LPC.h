@@ -35,7 +35,7 @@ FORCEINLINE VOID SafeStrCopy(LPTSTR pszDest,size_t cchDest,LPCTSTR pszSrc)
 }
 
 #define STRLEN(x) SafeStrlen(x)
-#define STRCOPY(a,b) SafeStrCopy((LPTSTR)a,SafeStrlen((LPCTSTR)b),(LPCTSTR)b)
+#define STRCOPY(a,b) SafeStrCopy((LPTSTR)a,SafeStrlen((LPCTSTR)b)*sizeof(LPCTSTR),(LPCTSTR)b)
 		
 #endif
 
